@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
 
 permissions: {}
 
@@ -17,22 +22,96 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_ADDITIONS: ${{ github.event.pull_request.additions }}
+          PR_DELETIONS: ${{ github.event.pull_request.deletions }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
           import json
           import os
           import urllib.request
 
-          repo = os.environ["REPO"]
-          sha = os.environ["SHA"][:7]
-          message = {
-              "content": f"🚀 New push to **{repo}** (`{sha}`)"
-          }
+          env = os.environ
+          repo = env["REPO"]
+
+
+          def clip(text, limit):
+              text = text.strip()
+              return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+          def summary(body):
+              # first meaningful line of the PR description, minus markdown noise
+              for line in body.splitlines():
+                  line = line.strip().lstrip("-*> ").strip()
+                  if line and not line.startswith("#"):
+                      return clip(line.replace("`", ""), 200)
+              return ""
+
+
+          if env["EVENT"] == "pull_request":
+              # GitHub calls a new push to the PR branch "synchronize"
+              action = {"synchronize": "updated"}.get(env["PR_ACTION"], env["PR_ACTION"])
+              embed = {
+                  "title": clip(f"#{env['PR_NUMBER']} {env['PR_TITLE']}", 250),
+                  "url": env["PR_URL"],
+                  "description": summary(env["PR_BODY"]),
+                  "color": 0x57F287 if action == "opened" else 0x5865F2,
+                  "author": {"name": f"PR {action} by {env['ACTOR']}"},
+                  "fields": [
+                      {"name": "Branch", "value": f"`{env['PR_HEAD']}` → `{env['PR_BASE']}`", "inline": True},
+                      {
+                          "name": "Changes",
+                          "value": f"{env['PR_FILES']} files · +{env['PR_ADDITIONS']} −{env['PR_DELETIONS']}",
+                          "inline": True,
+                      },
+                  ],
+                  "footer": {"text": repo},
+              }
+          elif env["EVENT"] == "push":
+              first_line = env["COMMIT_MESSAGE"].splitlines()[0] if env["COMMIT_MESSAGE"] else ""
+              embed = {
+                  "title": clip(first_line or f"Push to {env['REF_NAME']}", 250),
+                  "url": env["COMMIT_URL"],
+                  "color": 0x99AAB5,
+                  "author": {"name": f"Push to {env['REF_NAME']} by {env['ACTOR']}"},
+                  "fields": [{"name": "Commit", "value": f"`{env['SHA'][:7]}`", "inline": True}],
+                  "footer": {"text": repo},
+              }
+          else:
+              embed = {
+                  "title": f"Manual run on {env['REF_NAME']}",
+                  "url": env["RUN_URL"],
+                  "color": 0x99AAB5,
+                  "author": {"name": f"Triggered by {env['ACTOR']}"},
+                  "fields": [{"name": "Commit", "value": f"`{env['SHA'][:7]}`", "inline": True}],
+                  "footer": {"text": repo},
+              }
+
+          # drop empty values (e.g. no PR description) so Discord doesn't reject them
+          embed = {k: v for k, v in embed.items() if v}
+          message = {"embeds": [embed]}
 
           request = urllib.request.Request(
-              os.environ["WEBHOOK_URL"],
+              env["WEBHOOK_URL"],
               data=json.dumps(message).encode(),
-              headers={"Content-Type": "application/json"},
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "homecare-ops-ci (github-actions)",
+              },
               method="POST",
           )
 
