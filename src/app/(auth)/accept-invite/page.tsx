@@ -19,6 +19,8 @@ export default function AcceptInvitePage() {
       return
     }
 
+    // URL hash is only readable client-side, so it has to be synced from an effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTokens({ access, refresh })
   }, [])
 

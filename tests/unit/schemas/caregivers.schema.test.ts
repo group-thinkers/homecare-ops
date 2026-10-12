@@ -183,6 +183,9 @@ describe('getCredentialHealth', () => {
     ['outside window', [{ status: 'Active', expiration_date: '2026-11-27' }], 'OK'],
     ['revoked only', [{ status: 'Revoked', expiration_date: '2026-01-01' }], 'Missing'],
   ] as const)('returns %s for the matching credential state', (_case, credentials, expected) => {
-    expect(getCredentialHealth(credentials, today)).toBe(expected)
+    expect(getCredentialHealth(
+        [...credentials] as unknown as Parameters<typeof getCredentialHealth>[0],
+        today,
+      )).toBe(expected)
   })
 })

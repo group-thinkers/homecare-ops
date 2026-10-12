@@ -103,8 +103,8 @@ export default function DashboardSidebar({
     isOverSmViewport && (!disableCollapsibleSidebar || isOverMdViewport);
 
   const renderNavigation = React.useCallback(
-    (items: NavigationItem[]): React.ReactNode =>
-      items.map((item, index) => {
+    function render(items: NavigationItem[]): React.ReactNode {
+      return items.map((item, index) => {
         if (item.kind === 'header') {
           return (
             <DashboardSidebarHeaderItem key={`header-${index}`}>
@@ -132,13 +132,14 @@ export default function DashboardSidebar({
             nestedNavigation={
               item.children ? (
                 <List dense sx={{ padding: 0, my: 1, pl: mini ? 0 : 1, minWidth: 240 }}>
-                  {renderNavigation(item.children)}
+                  {render(item.children)}
                 </List>
               ) : undefined
             }
           />
         );
-      }),
+      });
+    },
     [pathname, expandedItemIds, mini],
   );
 

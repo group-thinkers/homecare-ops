@@ -192,7 +192,7 @@ export interface AlertDialogPayload extends AlertOptions {
   msg: React.ReactNode;
 }
 
-export interface AlertDialogProps extends DialogProps<AlertDialogPayload, void> {}
+export type AlertDialogProps = DialogProps<AlertDialogPayload, void>;
 
 export function AlertDialog({ open, payload, onClose }: AlertDialogProps) {
   const okButtonProps = useDialogLoadingButton(() => onClose());
@@ -214,10 +214,7 @@ export interface ConfirmDialogPayload extends ConfirmOptions {
   msg: React.ReactNode;
 }
 
-export interface ConfirmDialogProps extends DialogProps<
-  ConfirmDialogPayload,
-  boolean
-> {}
+export type ConfirmDialogProps = DialogProps<ConfirmDialogPayload, boolean>;
 
 export function ConfirmDialog({ open, payload, onClose }: ConfirmDialogProps) {
   const cancelButtonProps = useDialogLoadingButton(() => onClose(false));
@@ -243,10 +240,7 @@ export interface PromptDialogPayload extends PromptOptions {
   msg: React.ReactNode;
 }
 
-export interface PromptDialogProps extends DialogProps<
-  PromptDialogPayload,
-  string | null
-> {}
+export type PromptDialogProps = DialogProps<PromptDialogPayload, string | null>;
 
 export function PromptDialog({ open, payload, onClose }: PromptDialogProps) {
   const [input, setInput] = React.useState('');

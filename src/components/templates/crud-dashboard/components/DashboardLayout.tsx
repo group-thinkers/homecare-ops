@@ -51,11 +51,11 @@ export default function DashboardLayout({
     [setIsNavigationExpanded],
   );
 
-  const layoutRef = React.useRef<HTMLDivElement>(null);
+  const [layoutEl, setLayoutEl] = React.useState<HTMLDivElement | null>(null);
 
   return (
     <Box
-      ref={layoutRef}
+      ref={setLayoutEl}
       sx={{ position: 'relative', display: 'flex', overflow: 'hidden', height: '100%', width: '100%' }}
     >
       <DashboardHeader
@@ -69,7 +69,7 @@ export default function DashboardLayout({
         navigation={navigation}
         expanded={isNavigationExpanded}
         setExpanded={setIsNavigationExpanded}
-        container={layoutRef?.current ?? undefined}
+        container={layoutEl ?? undefined}
       />
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
         <Toolbar sx={{ displayPrint: 'none' }} />

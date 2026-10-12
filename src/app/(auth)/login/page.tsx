@@ -17,6 +17,8 @@ export default function LoginPage() {
       return
     }
     if (params.get('error') === 'access_denied') {
+      // URL hash is only readable client-side, so it has to be synced from an effect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHashError('This invitation link has expired or is no longer valid. Please contact your administrator to request a new invitation.')
       return
     }
