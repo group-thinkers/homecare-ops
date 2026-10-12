@@ -2,8 +2,6 @@ name: Discord CI Notifications
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
   pull_request:
     paths-ignore:
       - "**.md"
@@ -35,8 +33,6 @@ jobs:
           PR_FILES: ${{ github.event.pull_request.changed_files }}
           PR_ADDITIONS: ${{ github.event.pull_request.additions }}
           PR_DELETIONS: ${{ github.event.pull_request.deletions }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          COMMIT_URL: ${{ github.event.head_commit.url }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
@@ -79,16 +75,6 @@ jobs:
                           "inline": True,
                       },
                   ],
-                  "footer": {"text": repo},
-              }
-          elif env["EVENT"] == "push":
-              first_line = env["COMMIT_MESSAGE"].splitlines()[0] if env["COMMIT_MESSAGE"] else ""
-              embed = {
-                  "title": clip(first_line or f"Push to {env['REF_NAME']}", 250),
-                  "url": env["COMMIT_URL"],
-                  "color": 0x99AAB5,
-                  "author": {"name": f"Push to {env['REF_NAME']} by {env['ACTOR']}"},
-                  "fields": [{"name": "Commit", "value": f"`{env['SHA'][:7]}`", "inline": True}],
                   "footer": {"text": repo},
               }
           else:
