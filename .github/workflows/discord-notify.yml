@@ -32,7 +32,10 @@ jobs:
           request = urllib.request.Request(
               os.environ["WEBHOOK_URL"],
               data=json.dumps(message).encode(),
-              headers={"Content-Type": "application/json"},
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "homecare-ops-ci (github-actions)",
+              },
               method="POST",
           )
 
