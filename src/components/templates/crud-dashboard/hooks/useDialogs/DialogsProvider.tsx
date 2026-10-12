@@ -24,6 +24,7 @@ export interface DialogProviderProps {
  * Provider for Dialog stacks. The subtree of this component can use the `useDialogs` hook to
  * access the dialogs API. The dialogs are rendered in the order they are requested.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any -- dialog stack holds heterogeneous payload/result types */
 export default function DialogsProvider(props: DialogProviderProps) {
   const { children, unmountAfter = 1000 } = props;
   const [stack, setStack] = React.useState<DialogStackEntry<any, any>[]>([]);
