@@ -37,10 +37,14 @@ jobs:
           repo = os.environ["REPO"]
           sha = os.environ["SHA"][:7]
           if os.environ["EVENT"] == "pull_request":
+              # GitHub calls a new push to the PR branch "synchronize"
+              action = {"synchronize": "updated"}.get(
+                  os.environ["PR_ACTION"], os.environ["PR_ACTION"]
+              )
               content = (
-                  f"🔀 PR #{os.environ['PR_NUMBER']} {os.environ['PR_ACTION']} "
+                  f"🔀 PR #{os.environ['PR_NUMBER']} {action} "
                   f"by **{os.environ['ACTOR']}** in **{repo}**: "
-                  f"{os.environ['PR_TITLE']}\n{os.environ['PR_URL']}"
+                  f"{os.environ['PR_TITLE']}\n<{os.environ['PR_URL']}>"
               )
           else:
               content = f"🚀 New push to **{repo}** (`{sha}`)"
