@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
 
 permissions: {}
 
@@ -17,6 +22,12 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_ACTION: ${{ github.event.action }}
+          ACTOR: ${{ github.actor }}
         run: |
           python3 - <<'PY'
           import json
@@ -25,9 +36,15 @@ jobs:
 
           repo = os.environ["REPO"]
           sha = os.environ["SHA"][:7]
-          message = {
-              "content": f"🚀 New push to **{repo}** (`{sha}`)"
-          }
+          if os.environ["EVENT"] == "pull_request":
+              content = (
+                  f"🔀 PR #{os.environ['PR_NUMBER']} {os.environ['PR_ACTION']} "
+                  f"by **{os.environ['ACTOR']}** in **{repo}**: "
+                  f"{os.environ['PR_TITLE']}\n{os.environ['PR_URL']}"
+              )
+          else:
+              content = f"🚀 New push to **{repo}** (`{sha}`)"
+          message = {"content": content}
 
           request = urllib.request.Request(
               os.environ["WEBHOOK_URL"],
