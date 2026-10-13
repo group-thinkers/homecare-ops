@@ -10,9 +10,9 @@ Do not modify production code while executing this skill.
 ## Process
 
 1. Restate the outcome and list non-goals (what later phases own).
-2. Read `docs/PROJECT_STATE.md`, `ARCHITECTURE.md`, the phase's section in `docs/implementation-plan.md` (including its
-   "Optimization integration" list), `docs/IMPLEMENTATION_CHEATSHEET.md`, the relevant parts of `docs/DATABASE.md`,
-   and the open items in `docs/KNOWN_ISSUES.md`. Pull in every open item that targets this work, or note why it stays deferred.
+2. Read `docs/PROJECT_STATE.md`, `docs/RULES.md`, `ARCHITECTURE.md`, and **only the sections you need** with `scripts/doc.sh` (never the whole file):
+   the phase from the plan (`scripts/doc.sh plan "^## Phase N"`, including its "Optimization integration" list), the cheatsheet layers you will touch,
+   the `docs/DATABASE.md` tables involved, and the open items in `docs/KNOWN_ISSUES.md` (`scripts/doc.sh known --list`). Pull in every open item that targets this work, or note why it stays deferred.
 3. **Check the plan against reality**: the plan's checkboxes and file paths can be stale. Verify with the repository
    (`ls`, `grep`) what exists before assuming it does.
 4. Inspect the closest existing implementation (patients, then caregivers) and reuse its patterns.

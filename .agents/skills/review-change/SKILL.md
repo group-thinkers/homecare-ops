@@ -5,8 +5,8 @@ description: Independent skeptical senior review of a diff for correctness, tena
 
 # Review Change
 
-Act as a skeptical senior reviewer. Do not modify files. Review against the plan, acceptance criteria, `AGENTS.md` invariants
-and Key Rules, the spec and ADRs.
+Act as a skeptical senior reviewer. Do not modify files. Read `docs/RULES.md` first. Review against the plan, acceptance criteria, its invariants
+and Key Rules, the spec and ADRs. Review the diff (`git diff main...`) and the files it touches; do not re-read whole documents.
 
 Check for: correctness bugs, regressions, missing edge cases, error handling, concurrency, compatibility breaks, data
 integrity, boundary violations, unnecessary complexity and duplicated logic.

@@ -6,7 +6,7 @@ description: Implement an approved plan as a vertical slice, following the cheat
 # Implement Change
 
 Before modifying code: read the active plan and `docs/PROJECT_STATE.md`; confirm `git status` and that you are on a feature
-branch; read `docs/IMPLEMENTATION_CHEATSHEET.md` for each layer you touch; inspect the existing pattern (`patients`) first.
+branch; read `docs/RULES.md` and, with `scripts/doc.sh cheat "<layer>"`, only the cheatsheet sections for the layers you touch; inspect the existing pattern (`patients`) first.
 
 Build in this order and finish the whole slice before the next entity:
 **migration → types → schemas → service → actions → pages → components → nav → tests → verify.**

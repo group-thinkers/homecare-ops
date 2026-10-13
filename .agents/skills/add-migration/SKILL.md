@@ -8,7 +8,7 @@ description: Checklist for any database change - migration file, RPC, policy, gr
 Merging to `main` applies new files in `supabase/migrations/` to production (`supabase-migrate.yml`). Migrations are append-only (INV-4).
 
 1. Number: the next free `000NN_snake_case.sql` (check `ls supabase/migrations`; the plan's numbers are stale). Never edit or renumber a migration on `main`; fix forward.
-2. Write it using the template in `docs/IMPLEMENTATION_CHEATSHEET.md` §2: header comment, `security definer` + `set search_path = public`,
+2. Write it using the template in the cheatsheet (`scripts/doc.sh cheat "Migrations"`): header comment, `security definer` + `set search_path = public`,
    permission check via `has_org_permission` first, explicit enum validation, `auth.uid()` for actor columns (never a client-supplied user id),
    and `revoke all … from public; grant execute … to authenticated;` with the full argument type list.
 3. New tables: `organization_id`, composite FKs, `enable row level security` in the same file, policies `to authenticated` using `has_org_permission`,
