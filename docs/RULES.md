@@ -72,3 +72,26 @@ regressions. Do not patch symptoms. **If you cannot make progress in two attempt
 Never expose, print, modify or commit API keys, passwords, tokens or `.env` contents. Changes to auth, sessions,
 permissions, RLS, grants or RPCs are security-sensitive: run `review-change` with the security checks and note the result
 in the plan. Secret scanning and push protection are on; a blocked push is a signal, not an obstacle.
+
+## Working with other contributors
+
+Several people and agents work at once. Agents cannot see each other's chats, so coordination lives in GitHub and in the repo.
+
+- **Developers claim; agents never do.** A developer runs `scripts/work.sh claim <issue>` (assigns it to them, labels it `in-progress`, records the
+  branch), then tells their agent to work on it. An agent runs `scripts/work.sh check <issue>` first and stops if the issue is unclaimed or held
+  by someone else. Agents do not claim, release, assign or relabel issues; `claim` and `release` refuse to run in a non-interactive shell.
+  A developer gives work back with `scripts/work.sh release <issue>`.
+- **One plan per task:** `docs/plans/active/<issue#>-<slug>.md` from `docs/plans/TEMPLATE.md`, with owner, branch, areas touched and the migration
+  number you claimed. Progress notes go in its Progress log, never in shared files.
+- **Open a draft PR early** so others see what is in flight (pushing and opening PRs follow the approval rules in `AGENTS.md`).
+  `scripts/work.sh board` lists open PRs with the areas they touch; `scripts/work.sh overlap` shows PRs touching your files.
+- **Migration numbers.** Two PRs taking the same next number would break the production push. CI (`migration-order`) fails duplicates, gaps and
+  edits of merged migrations. If your unmerged migration collides after a rebase, renumber it. A justified edit of a merged migration needs a
+  line in `supabase/migration-edits.allow` (with a reason) in the same PR.
+- **Rebase protocol before a PR:** `git fetch && git rebase origin/main`; if `package-lock.json` conflicts, take main's and run
+  `npm install --package-lock-only`; then `npm run quality` and, for database work, `supabase test db`.
+- **Shared hot files** that many slices edit: `src/types/index.ts`, `src/app/(dashboard)/DashboardFrame.tsx` (nav), `docs/DATABASE.md`,
+  `docs/KNOWN_ISSUES.md`, `package-lock.json`. Keep edits there small and append-style, and merge both sides when they conflict.
+- **Merge etiquette.** Squash merges; delete the branch after. Do not edit another developer's claimed issue, branch or plan; ask your developer to raise it with them.
+- **Dependabot** PRs merge themselves when patch-only and green; leave them alone otherwise.
+

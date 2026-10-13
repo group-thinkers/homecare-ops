@@ -8,9 +8,9 @@ disable-model-invocation: true
 
 Do not push or create a PR without explicit user approval.
 
-Before preparing: confirm the working tree is clean, tests and validation evidence exist, read the complete diff, and identify
+Before preparing: run `git fetch && git rebase origin/main` (if `package-lock.json` conflicts, take main's and run `npm install --package-lock-only`; if your migration number collides, renumber your unmerged file), re-run `npm run quality` (and `supabase test db` for database work), run `scripts/work.sh overlap`, confirm the working tree is clean, tests and validation evidence exist, read the complete diff, and identify
 breaking changes, **migrations (merging deploys them to production, and a bad one cannot be rolled back, only fixed forward)**,
 changes to permissions or RLS, and unresolved risks. Confirm nothing sensitive is in the diff (the repository is public).
 
 Produce: Summary, Why, Implementation, Testing (commands and results), Screenshots / Evidence, Risks, Rollback (Vercel rollback for
-the app; a forward-fix migration for the database), Follow-up Work. Link the plan and ADRs. `CI ok` must pass before merge.
+the app; a forward-fix migration for the database), Follow-up Work. Fill in the PR template's Issue, Areas touched and Migration number. Link the plan and ADRs. `CI ok` must pass before merge.

@@ -30,6 +30,7 @@ A deferral is not a fix: add an item only with a severity and a target.
 | KI-017 | S2 | `docs/API_AUTHORIZATION_OPTIMIZATION_PLAN.md` is referenced by the plan and cheatsheet as mandatory for Phase 6 onward but is not in the repo. | Agents lack part of the required guidance. | Owner supplies it; until then apply the plan's "Optimization requirements" list and Key Rules 11–15. |
 | KI-018 | S3 | Many `docs/QUERY_PERFORMANCE_BACKLOG.md` items are unchecked (parent-first streaming, bounded previews, single-record edit queries, index review). | Slower detail pages as data grows. | Apply per module as it is touched. |
 | KI-019 | S3 | Docs drift: the plan and cheatsheet name `NEXT_PUBLIC_SUPABASE_ANON_KEY`; the code uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The plan's folder tree omits the `(dashboard)` route group. | Confusing for a new contributor. | Update the docs when next edited. |
+| KI-020 | S3 | Collaboration settings from ADR-002 are not applied yet: the labels (`phase:6`..`phase:12`, `in-progress`, `blocked`, `needs-owner`, `agent-ready`, `known-issue`), squash-only merges and auto-delete of merged branches. `scripts/work.sh claim` creates `in-progress` on demand. | Labels and merge method are inconsistent until set. | Owner approves, then it is a few `gh` commands. |
 
 ## Resolved
 

@@ -7,7 +7,7 @@ description: Checklist for any database change - migration file, RPC, policy, gr
 
 Merging to `main` applies new files in `supabase/migrations/` to production (`supabase-migrate.yml`). Migrations are append-only (INV-4).
 
-1. Number: the next free `000NN_snake_case.sql` (check `ls supabase/migrations`; the plan's numbers are stale). Never edit or renumber a migration on `main`; fix forward.
+1. Number: the next free `000NN_snake_case.sql` (check `ls supabase/migrations` AND open PRs with `scripts/work.sh board`; the plan's numbers are stale). Record it in your plan's header. If it collides after a rebase, renumber your unmerged file. CI (`migration-order`, `scripts/check-migrations.sh`) fails duplicates, gaps and edits of merged migrations. Never edit or renumber a migration on `main`; fix forward. A truly justified edit needs a line (file name and reason) in `supabase/migration-edits.allow` in the same PR.
 2. Write it using the template in the cheatsheet (`scripts/doc.sh cheat "Migrations"`): header comment, `security definer` + `set search_path = public`,
    permission check via `has_org_permission` first, explicit enum validation, `auth.uid()` for actor columns (never a client-supplied user id),
    and `revoke all … from public; grant execute … to authenticated;` with the full argument type list.

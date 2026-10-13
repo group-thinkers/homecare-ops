@@ -1,0 +1,48 @@
+name: Task
+description: A unit of planned work (a slice of a plan phase, a feature, a refactor)
+title: "[Phase N] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A developer claims this issue (`scripts/work.sh claim <n>`) and then tells an agent to work on it. Agents never claim issues.
+  - type: input
+    id: phase
+    attributes:
+      label: Phase or area
+      description: 'For example "Phase 6, payers and organization services". See docs/implementation-plan.md.'
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The outcome, in a sentence or two. Non-goals if useful.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable. Prefer commands and expected results.
+      placeholder: "- [ ] `npm run quality` passes\n- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: areas
+    attributes:
+      label: Areas touched
+      description: Folders or files, so others can see overlap. Mention shared files (src/types/index.ts, the nav, docs/DATABASE.md).
+  - type: dropdown
+    id: migration
+    attributes:
+      label: Needs a database migration?
+      options: ["No", "Yes (will claim the next number in the plan)"]
+    validations:
+      required: true
+  - type: textarea
+    id: refs
+    attributes:
+      label: Spec and plan references
+      description: Plan section, spec section, ADRs, related issues.

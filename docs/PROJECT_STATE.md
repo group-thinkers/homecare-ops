@@ -31,19 +31,18 @@ Tests: ~370 unit, 36 pgTAP assertions, 11 browser tests. All CI checks pass.
    unmerged Phase 6 code exists (KI-011); the product questions in KI-015.
 
 ## Standing approvals
-None. Pushing and opening PRs need explicit approval each time (AGENTS.md, Git and Release Safety). The owner may record a
-standing approval here, for example: "agents may push branches and open PRs; the owner merges."
+None for pushing or opening PRs: each needs explicit approval (AGENTS.md, Git and Release Safety). The owner may record one here, for
+example: "agents may push branches and open draft PRs; developers merge." Claiming issues is never delegated: developers claim, agents do not.
 
 ## Housekeeping
-- PR #11 is an empty Copilot attempt ("no changes to propose"); close it.
-- Open GitHub Issues: #1 (user list query standardization), #2 (auth token refresh), #3 (address autocomplete), #5 (document scanner), #9 (notification templates), #10 (matching ruleset in the database).
+- PR #11 (an empty Copilot attempt) was closed on 2026-10-13.
 - The plan's migration numbers are stale (KI-012); the next free number is 00018.
 
-## Proposed next task (the owner confirms)
-Phase 6: the authorization module, as vertical slices (payers and organization services first, then patient authorizations with
-service lines, then rate management), following plan §6 and the optimization checklist in §6.0. **First** confirm with the owner
-whether the other developer has unmerged Phase 6 code (KI-011), and get `API_AUTHORIZATION_OPTIMIZATION_PLAN.md` (KI-017). Start with `plan-change`.
-After that, the plan's order is: Phase 7 shifts, Phase 3 leftovers, Phase 8 matching, Phase 9 call-offs, then 10–12.
+## Work board
+There is no "next task" here: GitHub Issues are the board and developers claim them (`scripts/work.sh board`). The plan's order for the
+remaining phases is 6 authorizations, 7 shifts, 3 leftovers, 8 matching, 9 call-offs, then 10-12. Before anyone plans Phase 6, resolve
+KI-011 (is there unmerged Phase 6 code?) and KI-017 (the missing optimization plan). The draft Phase 6 issue breakdown is in
+`docs/plans/phase-6-issue-drafts.md`; create the real issues from it when the owner approves.
 
 ## Verification commands
 `npm run quality` · `supabase start` then `supabase test db` · `npm run test:e2e`

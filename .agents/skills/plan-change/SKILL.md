@@ -9,6 +9,7 @@ Do not modify production code while executing this skill.
 
 ## Process
 
+0. **Confirm the issue is yours.** Your developer names the issue. Run `scripts/work.sh check <n>`; if it says STOP (unclaimed, or held by someone else), stop and tell your developer. Never claim an issue yourself. Run `scripts/work.sh board` and `scripts/work.sh overlap` to see what is in flight and avoid colliding with it.
 1. Restate the outcome and list non-goals (what later phases own).
 2. Read `docs/PROJECT_STATE.md`, `docs/RULES.md`, `ARCHITECTURE.md`, and **only the sections you need** with `scripts/doc.sh` (never the whole file):
    the phase from the plan (`scripts/doc.sh plan "^## Phase N"`, including its "Optimization integration" list), the cheatsheet layers you will touch,
@@ -26,6 +27,6 @@ Do not modify production code while executing this skill.
 
 ## Output
 
-Write `docs/plans/active/<slug>.md` with: Status, Outcome, Non-Goals, Current State (verified), Known issues considered,
+Copy `docs/plans/TEMPLATE.md` to `docs/plans/active/<issue#>-<slug>.md` and fill it in. It records the issue, owner, branch, areas touched and the migration number you claim (the next free one, checked against `main` and open PRs). Sections: Status, Outcome, Non-Goals, Current State (verified), Known issues considered,
 Decisions (confirm questionable ones before implementing), Proposed Design, Affected Files, Acceptance Criteria,
 Verification Plan, Risks, Ordered Steps (checkboxes). Decisions a future contributor could reasonably question become ADRs (`write-adr`).

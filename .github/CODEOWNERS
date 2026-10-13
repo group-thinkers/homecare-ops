@@ -1,0 +1,10 @@
+# Auto-requests a review; it does not block merging (the repo requires no approvals, so developers can merge their own PRs).
+# abdullahimohamed101 owns the CI/CD pipeline and so, by default, migrations and the RLS tests. The other code owners (mahdiahmed1010, apello)
+# can be added to any line below, or to a "*" rule for the whole repo.
+/supabase/migrations/        @abdullahimohamed101
+/supabase/tests/             @abdullahimohamed101
+/supabase/migration-edits.allow @abdullahimohamed101
+/.github/                    @abdullahimohamed101
+/scripts/                    @abdullahimohamed101
+/AGENTS.md                   @abdullahimohamed101
+/docs/RULES.md               @abdullahimohamed101
