@@ -41,8 +41,8 @@ example: "agents may push branches and open draft PRs; developers merge." Claimi
 ## Work board
 There is no "next task" here: GitHub Issues are the board and developers claim them (`scripts/work.sh board`). The plan's order for the
 remaining phases is 6 authorizations, 7 shifts, 3 leftovers, 8 matching, 9 call-offs, then 10-12. Before anyone plans Phase 6, resolve
-KI-011 (is there unmerged Phase 6 code?) and KI-017 (the missing optimization plan). The draft Phase 6 issue breakdown is in
-`docs/plans/phase-6-issue-drafts.md`; create the real issues from it when the owner approves.
+KI-011 (is there unmerged Phase 6 code?) and KI-017 (the missing optimization plan). The Phase 6 issues exist (#24 gate, #25 to #30); the breakdown and order are in
+`docs/plans/phase-6-issue-drafts.md`. They are labelled `blocked` until the gate (#24) is resolved.
 
 ## Verification commands
 `npm run quality` · `supabase start` then `supabase test db` · `npm run test:e2e`
