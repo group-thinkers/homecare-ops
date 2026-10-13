@@ -57,6 +57,7 @@ jobs:
           version: 2.120.0
       - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,postgres-meta,realtime,storage-api
       - run: supabase migration list --local
+      - run: supabase test db
       - if: always()
         run: supabase stop --no-backup
 
