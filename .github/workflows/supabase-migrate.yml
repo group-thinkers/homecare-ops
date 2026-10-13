@@ -35,3 +35,43 @@ jobs:
 
       - name: Push migrations
         run: supabase db push
+
+  # A failed push must not go unnoticed: this workflow failed silently for weeks once. Production's schema is
+  # behind main whenever it fails. Runs outside the production environment, so it uses the repository webhook secret.
+  notify-failure:
+    name: tell Discord
+    needs: push-migrations
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Post failure to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$WEBHOOK_URL" ] || { echo "no webhook configured"; exit 0; }
+          python3 - <<'PY'
+          import json, os, urllib.request
+          env = os.environ
+          embed = {
+              "title": "Production migrations failed",
+              "url": env["RUN_URL"],
+              "color": 0xED4245,
+              "description": "The Supabase push did not complete, so the production database is behind main. Check the run log (an invalid access token is the usual cause).",
+              "fields": [
+                  {"name": "Commit", "value": f"`{env['SHA'][:7]}` by {env['ACTOR']}", "inline": True},
+              ],
+              "footer": {"text": env["REPO"]},
+          }
+          req = urllib.request.Request(
+              env["WEBHOOK_URL"],
+              data=json.dumps({"embeds": [embed]}).encode(),
+              headers={"Content-Type": "application/json", "User-Agent": "homecare-ops-migrations"},
+          )
+          urllib.request.urlopen(req, timeout=15)
+          PY
