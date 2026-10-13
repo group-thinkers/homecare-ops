@@ -119,33 +119,33 @@ begin
 
   select exists (
     select 1
-    from public.patient_authorizations authorization
-    where authorization.organization_id = target_org_id
-      and authorization.patient_id = target_patient_id
-      and authorization.archived_at is null
-      and service_date between authorization.authorization_start_date and authorization.authorization_end_date
+    from public.patient_authorizations pa
+    where pa.organization_id = target_org_id
+      and pa.patient_id = target_patient_id
+      and pa.archived_at is null
+      and service_date between pa.authorization_start_date and pa.authorization_end_date
   ) into authorization_exists;
 
   select exists (
     select 1
-    from public.patient_authorizations authorization
-    where authorization.organization_id = target_org_id
-      and authorization.patient_id = target_patient_id
-      and authorization.archived_at is null
-      and authorization.status = 'Active'
-      and service_date between authorization.authorization_start_date and authorization.authorization_end_date
+    from public.patient_authorizations pa
+    where pa.organization_id = target_org_id
+      and pa.patient_id = target_patient_id
+      and pa.archived_at is null
+      and pa.status = 'Active'
+      and service_date between pa.authorization_start_date and pa.authorization_end_date
   ) into active_authorization_exists;
 
   select authorization_service.* into matching_service
   from public.authorization_services authorization_service
-  join public.patient_authorizations authorization
-    on authorization.id = authorization_service.authorization_id
-   and authorization.organization_id = authorization_service.organization_id
+  join public.patient_authorizations pa
+    on pa.id = authorization_service.authorization_id
+   and pa.organization_id = authorization_service.organization_id
   where authorization_service.organization_id = target_org_id
-    and authorization.patient_id = target_patient_id
-    and authorization.archived_at is null
-    and authorization.status = 'Active'
-    and service_date between authorization.authorization_start_date and authorization.authorization_end_date
+    and pa.patient_id = target_patient_id
+    and pa.archived_at is null
+    and pa.status = 'Active'
+    and service_date between pa.authorization_start_date and pa.authorization_end_date
     and authorization_service.organization_service_id = target_organization_service_id
     and authorization_service.active = true
     and service_date between authorization_service.effective_start_date and authorization_service.effective_end_date
