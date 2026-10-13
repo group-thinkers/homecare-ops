@@ -11,6 +11,7 @@
     "quality": "scripts/quality.sh full",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "scripts/e2e.sh",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
     "db:dump": "supabase db dump --linked -f supabase/schema.sql"
@@ -35,6 +36,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
