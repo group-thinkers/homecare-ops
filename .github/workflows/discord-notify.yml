@@ -12,6 +12,8 @@ permissions: {}
 
 jobs:
   notify:
+    # Dependabot PRs cannot read repository secrets (they have their own store), so the webhook would be empty.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
