@@ -1,0 +1,22 @@
+name: Bug
+description: Something behaves wrongly
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what should have happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic data only. Never paste real patient or caregiver information.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where (page, role, organization)
