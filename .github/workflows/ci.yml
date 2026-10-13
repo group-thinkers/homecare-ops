@@ -160,11 +160,29 @@ jobs:
         if: always()
         run: supabase stop --no-backup
 
+  migration-order:
+    # Production applies supabase/migrations on merge. Two PRs that both took the next number, or an edited migration,
+    # would break that push, so this fails them on the PR. See scripts/check-migrations.sh and supabase/migration-edits.allow.
+    name: migration order (numbers, append-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check migration numbering
+        if: github.event_name != 'pull_request'
+        run: scripts/check-migrations.sh
+      - name: Check migration numbering and that existing migrations are unchanged
+        if: github.event_name == 'pull_request'
+        run: scripts/check-migrations.sh --base "origin/${{ github.base_ref }}"
+
   # The single check to require in branch protection.
   ci-ok:
     name: CI ok
     if: always()
-    needs: [lint, typecheck, test, build, migrations, e2e]
+    needs: [lint, typecheck, test, build, migrations, e2e, migration-order]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -174,3 +192,40 @@ jobs:
         run: |
           echo "results: $RESULTS"
           for r in $RESULTS; do [ "$r" = success ] || { echo "a required job did not succeed"; exit 1; }; done
+
+  # A red main must not go unnoticed (it deploys). Only for pushes to main, not pull requests.
+  notify-main-failure:
+    name: tell Discord (main is red)
+    needs: [ci-ok]
+    if: always() && github.event_name == 'push' && needs.ci-ok.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Post failure to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$WEBHOOK_URL" ] || { echo "no webhook configured"; exit 0; }
+          python3 - <<'PY'
+          import json, os, urllib.request
+          env = os.environ
+          embed = {
+              "title": "CI failed on main",
+              "url": env["RUN_URL"],
+              "color": 0xED4245,
+              "description": "A required check failed after a merge. main deploys, so fix or revert promptly.",
+              "fields": [{"name": "Commit", "value": f"`{env['SHA'][:7]}` by {env['ACTOR']}", "inline": True}],
+              "footer": {"text": env["REPO"]},
+          }
+          req = urllib.request.Request(
+              env["WEBHOOK_URL"],
+              data=json.dumps({"embeds": [embed]}).encode(),
+              headers={"Content-Type": "application/json", "User-Agent": "homecare-ops-ci"},
+          )
+          urllib.request.urlopen(req, timeout=15)
+          PY

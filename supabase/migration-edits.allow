@@ -1,0 +1,3 @@
+# Migrations that may be modified after they reached main. One file name per line, then the reason.
+# Adding a line is a deliberate, reviewable act (this file is covered by CODEOWNERS). Prefer a new forward-fix migration.
+# Format:  00017_example.sql  why this edit is safe
