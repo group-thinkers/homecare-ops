@@ -1,0 +1,93 @@
+name: Nightly
+
+# Things that rot without a code change (new advisories, dependency and action releases, a broken main) and
+# checks that are too slow for every pull request. Scheduled runs always use the default branch.
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # daily, off the top of the hour when GitHub is busiest
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: dependency audit (high and critical, enforced)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: AUDIT_LEVEL=high scripts/quality.sh audit
+
+  full:
+    name: full quality gate on main
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: scripts/quality.sh full
+
+  migrations:
+    name: migrations from scratch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+      - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,postgres-meta,realtime,storage-api
+      - run: supabase migration list --local
+      - if: always()
+        run: supabase stop --no-backup
+
+  notify:
+    name: tell Discord
+    needs: [audit, full, migrations]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post failure to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$WEBHOOK_URL" ] || { echo "no webhook configured"; exit 0; }
+          python3 - <<'PY'
+          import json, os, urllib.request
+          env = os.environ
+          embed = {
+              "title": "Nightly failed",
+              "url": env["RUN_URL"],
+              "color": 0xED4245,
+              "description": "Audit, the full quality gate, or the migrations check failed on main.",
+              "footer": {"text": env["REPO"]},
+          }
+          req = urllib.request.Request(
+              env["WEBHOOK_URL"],
+              data=json.dumps({"embeds": [embed]}).encode(),
+              headers={"Content-Type": "application/json", "User-Agent": "homecare-ops-nightly"},
+          )
+          urllib.request.urlopen(req, timeout=15)
+          PY

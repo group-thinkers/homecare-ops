@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "quality": "scripts/quality.sh full",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:status": "supabase migration list",
