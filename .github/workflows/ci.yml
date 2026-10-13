@@ -101,9 +101,9 @@ jobs:
       - run: scripts/quality.sh audit
 
   migrations:
-    # Applies supabase/migrations from scratch on a local Supabase stack, so a broken migration
+    # Applies supabase/migrations from scratch on a local Supabase stack and runs supabase/tests (pgTAP), so a broken migration or RLS policy
     # fails the pull request instead of the production push.
-    name: migrations (supabase start)
+    name: migrations and database tests (supabase)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -118,6 +118,44 @@ jobs:
         run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,postgres-meta,realtime,storage-api
       - name: Applied migrations
         run: supabase migration list --local
+      - name: Database tests (RLS, tenant isolation, permissions)
+        run: supabase test db
+      - name: Stop
+        if: always()
+        run: supabase stop --no-backup
+
+  e2e:
+    # Real browser (Playwright, Chromium) against a production build and the local Supabase stack, with seeded
+    # users in two organizations (tests/e2e). The pgTAP tests prove the policies; these prove the app on top of them.
+    name: browser tests (playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+      - run: npm ci
+      - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,postgres-meta,realtime,storage-api
+      - run: npx playwright install --with-deps chromium
+      - name: Seed, build and run the browser tests
+        run: scripts/e2e.sh
+      - name: Keep the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Stop
         if: always()
         run: supabase stop --no-backup
@@ -126,7 +164,7 @@ jobs:
   ci-ok:
     name: CI ok
     if: always()
-    needs: [lint, typecheck, test, build, migrations]
+    needs: [lint, typecheck, test, build, migrations, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
