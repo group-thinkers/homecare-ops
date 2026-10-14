@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 import type { OrganizationMembership, UserProfile } from '@/types'
 
 // Custom error class for auth failures
@@ -11,12 +12,12 @@ export class AuthError extends Error {
 }
 
 // Returns the current user from Supabase, or null if not logged in
-export async function getSession() {
+export const getSession = cache(async () => {
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) return null
   return user
-}
+})
 
 // Like getSession(), but redirects to /login instead of returning null — use in server components that require auth
 export async function requireAuth() {
@@ -26,7 +27,7 @@ export async function requireAuth() {
 }
 
 // Returns the current user's active membership for a given org, or null if they don't belong to it
-export async function getOrgMembership(orgId: string): Promise<OrganizationMembership | null> {
+export const getOrgMembership = cache(async (orgId: string): Promise<OrganizationMembership | null> => {
   const user = await getSession()
   if (!user) return null
 
@@ -41,10 +42,10 @@ export async function getOrgMembership(orgId: string): Promise<OrganizationMembe
 
   if (error || !data) return null
   return data as OrganizationMembership
-}
+})
 
 // Returns the current user's first active org membership, or null if none exists
-export async function getActiveMembership(): Promise<OrganizationMembership | null> {
+export const getActiveMembership = cache(async (): Promise<OrganizationMembership | null> => {
   const user = await getSession()
   if (!user) return null
 
@@ -59,10 +60,10 @@ export async function getActiveMembership(): Promise<OrganizationMembership | nu
 
   if (error || !data) return null
   return data as OrganizationMembership
-}
+})
 
 
-export async function getUserProfile(): Promise<UserProfile | null> {
+export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const user = await getSession()
   if (!user) return null
 
@@ -75,4 +76,4 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
   if (error || !data) return null
   return data as UserProfile
-}
+})

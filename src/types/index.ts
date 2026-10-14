@@ -28,6 +28,7 @@ export type PermissionCode =
   | 'caregivers.manage'
   | 'caregivers.read_compensation'
   | 'authorizations.manage'
+  | 'authorizations.read_rates'
   | 'shifts.manage'
   | 'matching.run'
   | 'call_offs.manage'
@@ -54,20 +55,26 @@ export type MatchingEffect = 'Required' | 'Preferred' | 'Review Required' | 'Exc
 
 export type VisibilityLevel = 'Operational' | 'Clinical' | 'Restricted'
 
-export type PayerType = 'Medicare' | 'Medicaid' | 'Waiver' | 'Managed Care' | 'Private Pay' | 'Other'
+export const PAYER_TYPES = ['Medicare', 'Medicaid', 'Waiver', 'Managed Care', 'Private Pay', 'Other'] as const
+export type PayerType = (typeof PAYER_TYPES)[number]
 
-export type AuthorizationStatus =
-  | 'Active'
-  | 'Pending Recertification'
-  | 'Under Review'
-  | 'Suspended'
-  | 'Expired'
+export const AUTHORIZATION_STATUSES = [
+  'Active',
+  'Pending Recertification',
+  'Under Review',
+  'Suspended',
+  'Expired',
+] as const
+export type AuthorizationStatus = (typeof AUTHORIZATION_STATUSES)[number]
 
-export type QuantityUnit = 'Hours' | 'Visits' | 'Units'
+export const QUANTITY_UNITS = ['Hours', 'Visits', 'Units'] as const
+export type QuantityUnit = (typeof QUANTITY_UNITS)[number]
 
-export type QuantityPeriod = 'Day' | 'Week' | 'Month' | 'Authorization Period'
+export const QUANTITY_PERIODS = ['Day', 'Week', 'Month', 'Authorization Period'] as const
+export type QuantityPeriod = (typeof QUANTITY_PERIODS)[number]
 
-export type RateUnit = 'Hour' | 'Visit' | 'Unit'
+export const RATE_UNITS = ['Hour', 'Visit', 'Unit'] as const
+export type RateUnit = (typeof RATE_UNITS)[number]
 
 export const CAREGIVER_CLASSIFICATIONS = ['RN', 'LPN', 'HHA', 'STNA'] as const
 
@@ -512,6 +519,74 @@ export type AuthorizationService = {
   updated_at: string | null
 }
 
+export type OrganizationServiceRate = {
+  id: string
+  organization_id: string
+  organization_service_id: string
+  reimbursement_rate: number
+  rate_unit: RateUnit
+  effective_start_date: string
+  effective_end_date: string | null
+  change_reason: string
+  created_by_user_id: string
+  created_at: string
+}
+
+export type OrganizationServiceWithMapping = Omit<OrganizationService, 'default_reimbursement_rate'> & {
+  service_code_mapping: Pick<
+    ServiceCodeMapping,
+    'id' | 'evv_service_id' | 'evv_service_name' | 'payer_type' | 'program_name'
+  > & {
+    billing_service: Pick<BillingService, 'billing_code' | 'service_name' | 'service_category'>
+  }
+}
+
+export type PayerListPage = {
+  rows: Pick<Payer, 'id' | 'organization_id' | 'payer_name' | 'payer_type' | 'program_name' | 'status' | 'created_at'>[]
+  rowCount: number
+}
+
+export type OrganizationServiceListPage = {
+  rows: OrganizationServiceWithMapping[]
+  rowCount: number
+}
+
+export type PatientAuthorizationListItem = Omit<PatientAuthorization, 'encrypted_prior_auth_number'> & {
+  payer: Pick<Payer, 'payer_name' | 'payer_type'>
+  service_count: number
+  effective_status: AuthorizationStatus
+}
+
+export type PatientAuthorizationListPage = {
+  rows: PatientAuthorizationListItem[]
+  rowCount: number
+}
+
+export type EffectiveRate = {
+  rate: number | null
+  rate_unit: RateUnit | null
+  source: 'authorization' | 'organization_default' | 'missing'
+}
+
+export type AuthorizationServiceCompatibility = {
+  authorization_valid: boolean
+  service_authorized: boolean
+  has_rate: boolean
+  reason_code: 'authorization_missing' | 'authorization_inactive' | 'service_not_authorized' | 'rate_missing' | null
+  rate_source: 'authorization' | 'organization_default' | 'missing'
+}
+
+export type AuthorizationServiceWithEffectiveRate = AuthorizationService & {
+  organization_service: Pick<OrganizationService, 'local_service_name'>
+  effective_rate: EffectiveRate
+}
+
+export type PatientAuthorizationDetail = Omit<PatientAuthorization, 'encrypted_prior_auth_number'> & {
+  payer: Pick<Payer, 'payer_name' | 'payer_type'>
+  services: AuthorizationServiceWithEffectiveRate[]
+  effective_status: AuthorizationStatus
+}
+
 // ─── Caregivers ───────────────────────────────────────────────────────────────
 
 export type Caregiver = {
@@ -852,6 +927,7 @@ export type Database = {
       organization_services:              TableDef<OrganizationService>
       patient_authorizations:             TableDef<PatientAuthorization>
       authorization_services:             TableDef<AuthorizationService>
+      organization_service_rates:          TableDef<OrganizationServiceRate>
       caregivers:                         TableDef<Caregiver>
       caregiver_compensation_rates:       TableDef<CaregiverCompensationRate>
       caregiver_credentials:              TableDef<CaregiverCredential>
@@ -925,6 +1001,50 @@ export type Database = {
       }
       can_manage_org_caregivers: { Args: { org_id: string }; Returns: boolean }
       can_read_org_compensation:  { Args: { org_id: string }; Returns: boolean }
+      can_manage_org_authorizations: { Args: { org_id: string }; Returns: boolean }
+      can_read_org_authorizations: { Args: { org_id: string }; Returns: boolean }
+      can_read_org_authorization_rates: { Args: { org_id: string }; Returns: boolean }
+      create_authorization_with_services: {
+        Args: {
+          target_org_id: string
+          target_patient_id: string
+          target_payer_id: string
+          authorization_start_date: string
+          authorization_end_date: string
+          status?: AuthorizationStatus
+          prior_auth_number?: string | null
+          services?: Record<string, unknown>[]
+        }
+        Returns: PatientAuthorization
+      }
+      check_authorization_service_compatibility: {
+        Args: {
+          target_org_id: string
+          target_patient_id: string
+          target_organization_service_id: string
+          service_date: string
+        }
+        Returns: AuthorizationServiceCompatibility[]
+      }
+      set_organization_service_rate: {
+        Args: {
+          target_org_id: string
+          target_organization_service_id: string
+          reimbursement_rate: number
+          rate_unit: RateUnit
+          effective_start_date: string
+          change_reason: string
+        }
+        Returns: OrganizationServiceRate
+      }
+      get_effective_organization_service_rates: {
+        Args: {
+          target_org_id: string
+          target_organization_service_ids: string[]
+          service_date: string
+        }
+        Returns: (Pick<OrganizationServiceRate, 'organization_service_id' | 'reimbursement_rate' | 'rate_unit'>)[]
+      }
       create_caregiver: {
         Args: {
           target_org_id: string
