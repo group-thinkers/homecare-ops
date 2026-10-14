@@ -11,7 +11,6 @@ A deferral is not a fix: add an item only with a severity and a target.
 
 | ID | Sev | Issue | Impact | Target |
 | --- | --- | --- | --- | --- |
-| KI-001 | S2 | The production migration workflow fails at "Link project" (`Invalid access token`) and has since 2026-09-16. Whether production has migrations 00013–00017 is **unverified**: `docs/DATABASE.md` says "applied through 00017", and `docs/MIGRATIONS.md` describes pushing by hand with the CLI, so it is probably current. | New migrations will not deploy automatically; if production is behind, the deployed app may reference objects that do not exist. | Owner replaces `SUPABASE_ACCESS_TOKEN` in the `production` environment and runs `supabase migration list` to compare. Back up before any push. |
 | KI-002 | S2 | Vercel does not wait for the `CI ok` check before deploying. | A red `main` could still deploy if protection is bypassed. | Owner sets "wait for checks" in the Vercel project. |
 | KI-003 | S2 | In the dashboard layout the whole page, including `<main>`, sits inside a wrapper with `aria-hidden="true"` (probably the MUI template's drawer). | Screen readers cannot see the page content. | Next UI task; look in `src/components/templates/crud-dashboard`. |
 | KI-004 | S2 | `PermissionCode` in `src/types/index.ts` lists `reports.read`, which no database role grants and no code uses, and omits `authorizations.read_rates`, which the database defines (00017). The plan (6.0.1) ticks "add to PermissionCode" as done; it is not in `main`. | Type and database disagree; a future `read_rates` check will not type-check. | First Phase 6 task: add `authorizations.read_rates`; the product lead decides on `reports.read` (KI-015). |
@@ -20,7 +19,6 @@ A deferral is not a fix: add an item only with a severity and a target.
 | KI-007 | S3 | Browser tests cover sign-in, redirects, org isolation and one permission-gated page. No create/edit flow. | Form regressions are only caught by unit tests. | When a form changes; the plan's Phase 14 lists the target E2E workflows. |
 | KI-008 | S3 | CodeQL is not a required check; secret-scanning non-provider patterns and validity checks are unavailable on this plan. | Findings do not block merges. | After a few clean CodeQL runs, add it to branch protection. |
 | KI-009 | S3 | Local Node is newer than the pinned 22.x, so `npm` prints an engine warning. | Cosmetic. | Use `nvm use` (see `.nvmrc`). |
-| KI-010 | S2 | Migration 00017 was edited in place on 2026-10-12 (the reserved word `authorization` used as a table alias in `check_authorization_service_compatibility`; renamed to `pa`) so that fresh databases build. If production ran the original 00017, its function may hold the old body, or may have been created without body validation. | The scheduler-safe compatibility check could fail at runtime in production. | Before any caller of `check_authorization_service_compatibility` ships (Phase 7): add migration 00018 that `create or replace`s the function with the corrected body, and verify in production. |
 | KI-011 | S2 | The plan ticks Phase 6 items 6.0–6.4 (service, schemas, types, read models) as done, but `main` contains only the migrations and a placeholder page. Origin unknown (an unmerged branch, or never committed). | Risk of duplicated work, or of building on code that is not here. | Owner confirms before Phase 6 planning. |
 | KI-012 | S3 | The plan's migration numbers are stale: it assigns `00017_shift_rpcs`, `00018_seed_rulesets_and_templates`, `00019_matching_rpcs`, `00020_call_off_rpcs`, but 00017 is already the authorization rate migration. | A literal reading would collide. | Use the next free number; update the plan when you reach each phase. |
 | KI-013 | S1 | Credential numbers and prior-authorization numbers are stored unencrypted (`TODO(encrypt-credential-number)`; the plan's 6.1 defers encryption to pgsodium or Vault). | Unacceptable with real PHI. | Before any real PHI enters any environment. |
@@ -35,6 +33,8 @@ A deferral is not a fix: add an item only with a severity and a target.
 
 | ID | Resolution |
 | --- | --- |
+| KI-001 | Production migration push repaired (2026-10-14): a new `SUPABASE_ACCESS_TOKEN` was set and the workflow ran green. Production had 00001 to 00015; the run applied 00016 and 00017. The failure alert was also seen to fire. |
+| KI-010 | Moot: production received 00017 from the repository's corrected version in the same run, so the function body is correct and no forward-fix migration is needed. |
 | KI-020 | Labels created, squash-only merges and auto-delete of merged branches enabled (2026-10-13). |
 | — | Migration 00017 used the reserved word `authorization` as an alias; renamed to `pa` (2026-10-12). See KI-010 for the forward-fix still needed. |
 | — | Critical Next.js advisories and high `sharp` / `source-map-js` advisories fixed by `npm audit fix` (2026-10-12). |
