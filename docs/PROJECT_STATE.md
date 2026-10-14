@@ -16,18 +16,15 @@ The plan (`docs/implementation-plan.md`) is dated 2026-09-09 and its "Current St
 | 3 Reference data | Billing services and EVV mappings are in migration 00012. **Not done:** `matching_rulesets` rows (issue #10) and `notification_templates` rows (issue #9). |
 | 4 Patients | Done (list, create, edit, archive, addresses, contacts, requirements, approval page). The authorization section is a placeholder page. |
 | 5 Caregivers | Done (list, create, edit, credentials, skills, availability, compensation, approval page). Eligibility and compensation forms take a raw `organization_service_id` until Phase 6 (KI-016). Caregiver action tests are missing (plan 5.7). |
-| 6 Authorizations | **Database only.** Migrations 00016 and 00017 are in `main` (RPCs, rate history, scheduler-safe compatibility check). The plan ticks the service, schema and type items as done, but `main` has no `authorizations.service.ts`, no schema, no actions, no pages, no `Database.Functions` entries (KI-011). |
+| 6 Authorizations | **Database only.** Migrations 00016 and 00017 are in `main` and applied to production on 2026-10-14 (RPCs, rate history, scheduler-safe compatibility check). The plan ticks the service, schema and type items as done, but `main` has no `authorizations.service.ts`, no schema, no actions, no pages, no `Database.Functions` entries (KI-011). |
 | 7–12 | Not started. `/dashboard` is a placeholder that prints session JSON. |
 | 13–15 | Conventions apply per phase; testing and deployment tooling are in place; budgets and monitoring are not. |
 
 Tests: ~370 unit, 36 pgTAP assertions, 11 browser tests. All CI checks pass.
 
 ## Blocked on the owner (agents cannot do these)
-1. **Production migration push** fails with `Invalid access token` (KI-001). The production database may still be current if
-   migrations were applied by hand with the CLI (`docs/DATABASE.md` says "applied through 00017"). The owner should replace
-   `SUPABASE_ACCESS_TOKEN` and run `supabase migration list` to compare local and remote.
-2. **Vercel "wait for checks"** is not configured (KI-002).
-3. **Missing and unconfirmed inputs**: `API_AUTHORIZATION_OPTIMIZATION_PLAN.md` (referenced as mandatory, not in the repo, KI-017); whether
+1. **Vercel "wait for checks"** is not configured (KI-002).
+2. **Missing and unconfirmed inputs**: `API_AUTHORIZATION_OPTIMIZATION_PLAN.md` (referenced as mandatory, not in the repo, KI-017); whether
    unmerged Phase 6 code exists (KI-011); the product questions in KI-015.
 
 ## Standing approvals
