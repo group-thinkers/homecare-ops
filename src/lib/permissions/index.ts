@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/db/client'
 import { AuthError } from '@/lib/auth/server'
+import { cache } from 'react'
 import type { PermissionCode } from '@/types'
 
 // Checks if the current user has a specific permission in an org — returns true/false
-export async function hasPermission(orgId: string, permCode: PermissionCode): Promise<boolean> {
+export const hasPermission = cache(async (orgId: string, permCode: PermissionCode): Promise<boolean> => {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('has_org_permission', {
     org_id: orgId,
@@ -11,7 +12,7 @@ export async function hasPermission(orgId: string, permCode: PermissionCode): Pr
   })
   if (error) return false
   return data === true
-}
+})
 
 // Like hasPermission(), but throws an AuthError instead of returning false — use to gate server actions
 export async function requirePermission(orgId: string, permCode: PermissionCode): Promise<void> {

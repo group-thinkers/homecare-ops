@@ -283,7 +283,7 @@ function toUtcDays(value: string): number {
 }
 
 export function getCredentialHealth(
-  credentials: CaregiverCredentialSummary[],
+  credentials: readonly Pick<CaregiverCredentialSummary, 'status' | 'expiration_date'>[],
   todayDate: string = new Date().toISOString().slice(0, 10),
   windowDays: number = CREDENTIAL_EXPIRY_WINDOW_DAYS,
 ): CredentialHealth {
