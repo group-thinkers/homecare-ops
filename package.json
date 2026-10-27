@@ -33,7 +33,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.108.2",
     "dayjs": "^1.11.21",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "^4.6.7"
@@ -47,7 +47,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^9",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.3",
     "jsdom": "^29.1.1",
     "typescript": "^5",
     "vitest": "^4.1.12"
