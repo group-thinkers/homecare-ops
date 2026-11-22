@@ -31,7 +31,7 @@ insert into public.organization_memberships (id, organization_id, user_id, roles
 insert into public.membership_permission_grants
   (id, organization_id, membership_id, permission_code, granted_by_user_id)
 values
-  ('a1100000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-0000-000000000000',
+  ('a1100000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000000',
    'a1000000-0000-0000-0000-000000000003', 'authorizations.read_rates', 'a0000000-0000-0000-0000-000000000001'),
   ('a1100000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000000',
    'a1000000-0000-0000-0000-000000000003', 'shifts.manage', 'a0000000-0000-0000-0000-000000000001');
