@@ -38,7 +38,7 @@ Read more **only when the task needs it**, and only the part you need:
 
 ## Coordination (several people and agents work in parallel)
 
-GitHub is the shared memory: issues (assignee = the developer who owns it), draft PRs (what is in flight), `scripts/work.sh overlap` (who touches your files).
+GitHub is the shared memory: issues (assignee = the developer who owns it), draft PRs (what is in flight), `scripts/work.sh overlap` (who touches your files). The sprint board (project 1 in the org) is for developers; agents do not edit it.
 Work in your own worktree: `git worktree add ../wt-<slug> -b <type>/<issue#>-<slug> origin/main`. Claim the next migration number in
 your plan before writing it. Before a PR: `git fetch && git rebase origin/main`, re-run `npm run quality`. Details and the shared hot files: `docs/RULES.md`.
 

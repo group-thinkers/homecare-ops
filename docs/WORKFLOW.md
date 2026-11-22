@@ -45,6 +45,13 @@ scripts/work.sh board                  # who is doing what
 scripts/work.sh overlap                # other open PRs touching your files
 ```
 
+## Sprints and the project board
+
+[Homecare Ops Project Board](https://github.com/orgs/group-thinkers/projects/1) is the sprint view over the issues (two-week iterations).
+Columns: Backlog, Ready, In progress, In review, Done. Issues stay the source of truth; the board is for planning and for seeing what is moving.
+Developers choose each sprint's issues and move cards. Agents do not edit the board, as with claiming. `Ready` means no hard dependencies and not
+`needs-owner`; blocked issues sit in Backlog until their dependencies merge.
+
 ## What keeps it safe
 
 - One required check, `CI ok`: lint, typecheck, unit tests, build, RLS and permission tests on a fresh local Supabase, browser tests, and the migration-order check. It applies to admins too; no approvals are required.
