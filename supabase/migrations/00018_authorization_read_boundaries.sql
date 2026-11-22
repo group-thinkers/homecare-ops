@@ -339,20 +339,20 @@ begin
 
   with matching_authorizations as (
     select
-      authorization.*,
+      patient_authorization.*,
       payer.payer_name,
       payer.payer_type
-    from public.patient_authorizations authorization
+    from public.patient_authorizations patient_authorization
     join public.payers payer
-      on payer.organization_id = authorization.organization_id
-      and payer.id = authorization.payer_id
+      on payer.organization_id = patient_authorization.organization_id
+      and payer.id = patient_authorization.payer_id
     join public.patients patient
-      on patient.organization_id = authorization.organization_id
-      and patient.id = authorization.patient_id
+      on patient.organization_id = patient_authorization.organization_id
+      and patient.id = patient_authorization.patient_id
       and patient.archived_at is null
-    where authorization.organization_id = target_org_id
-      and authorization.patient_id = target_patient_id
-      and authorization.archived_at is null
+    where patient_authorization.organization_id = target_org_id
+      and patient_authorization.patient_id = target_patient_id
+      and patient_authorization.archived_at is null
   ),
   page_rows as (
     select *
