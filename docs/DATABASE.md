@@ -11,8 +11,7 @@
 > Optional but recommended after each deploy: `npm run db:dump` (see `docs/MIGRATIONS.md`) regenerates
 > `supabase/schema.sql` from the live DB so you can diff it against this document.
 
-**Production applied through:** `00017_authorization_rate_security.sql`
-**Next in this branch:** `00018_authorization_read_boundaries.sql` (not yet applied)
+**Production applied through:** `00018_authorization_read_boundaries.sql` (applied via Supabase CLI on 2026-11-22)
 **Migration files:** `supabase/migrations/` (sequential `000NN_snake_case.sql`)
 **Types mirror:** `src/types/index.ts` (hand-written — keep in sync)
 

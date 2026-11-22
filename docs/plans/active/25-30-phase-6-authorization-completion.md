@@ -3,7 +3,7 @@
 - **Issue:** #25–#30 (claimed by @apello; ownership confirmed with `scripts/work.sh check`)
 - **Owner:** @apello
 - **Branch:** `feat/authorization-service-schemas`
-- **Status:** Implementation complete; blocked on required environment verification
+- **Status:** Implemented and migration deployed; Phase 6 browser role walkthrough remains
 - **Areas touched:** `src/app/(dashboard)/patients`, `src/app/(dashboard)/settings`, `src/app/(dashboard)/caregivers`, `src/lib`, `src/types`, `supabase/tests/database`, `tests/unit`, `docs`
 - **Migration number claimed:** `00018_authorization_read_boundaries.sql` (safe column grants, bounded authorization read models, scheduler reads and permissioned rates).
 - **Spec / plan refs:** `docs/implementation-plan.md` §6; `docs/plans/phase-6-issue-drafts.md`; `docs/IMPLEMENTATION_CHEATSHEET.md`; `docs/DATABASE.md` §4.4
@@ -21,10 +21,10 @@ Complete the Phase 6 authorization module: payers, organization services, patien
 ## Current State (verified against the repo, not the plan's checkboxes)
 
 - The feature branch starts at the owner-supplied commit and contains the existing Phase 6 schemas, types, services and migration 00016/00017 contracts.
-- The branch now has the 00018 read-boundary migration and authorization pgTAP suite; database execution is blocked by the missing local Docker/Podman runtime (KI-006).
+- Migration 00018 is applied to production and the authorization pgTAP suite passed in CI; local Docker/Podman remains unavailable (KI-006).
 - Payer settings/actions, organization-service/rate UI, patient-authorization UI, server actions, and the caregiver compensation picker are implemented and covered by unit tests.
 - `scripts/work.sh check 25` through `check 30` report each issue claimed by @apello.
-- `npm run quality` passes after retrying Next.js's security reminder; the installed version still has a known security vulnerability. The upgrade is outside this plan and awaits owner choice.
+- `npm run quality` passes with the current mainline Next.js 16.4.6 dependency.
 
 ## Known issues considered
 
@@ -62,8 +62,8 @@ Build in dependency order: foundations/tests, payers and organization services, 
 ## Acceptance Criteria
 
 - `npm run quality` exits 0 after implementation; warnings are reported without unrelated cleanup.
-- `supabase test db` has 76 pgTAP assertions for organization-service-rate RLS, financial-reader access, scheduler compatibility without raw rates, paginated reads, status transitions, cross-organization denial and `anon` denial. **UNVERIFIED:** the latest CI database run failed; fixes await rerun. Local `supabase start` and `supabase test db` cannot connect because neither Docker nor Podman is installed.
-- `npm run test:e2e` is **UNVERIFIED (env):** its Supabase startup fails without Docker/Podman, followed by `API_URL: unbound variable`. Authenticated browser flows therefore remain unverified.
+- **VERIFIED (CI):** `supabase test db` passes 112 assertions, including 76 authorization boundary assertions, in run 45085531238. Local Supabase cannot start without Docker/Podman.
+- **VERIFIED (CI):** the existing browser suite passes in run 45085531238. **UNVERIFIED:** the new Phase 6 workflows still need an authenticated role walkthrough; local `npm run test:e2e` cannot start Supabase without Docker/Podman.
 - `git diff --check` exits 0.
 - Payer and organization-service lists use bounded pagination, explicit projections, deterministic ordering and database-side counts; the caregiver compensation form selects an active organization service instead of accepting a raw ID.
 - Authorization lists/details never select or expose `encrypted_prior_auth_number`; read-time expiry does not write; detail rate resolution is batched, not per service row.
@@ -107,3 +107,4 @@ Build in dependency order: foundations/tests, payers and organization services, 
 - 2026-11-22: CI run 45084294834 successfully applied 00018 from scratch and passed the browser, lint, typecheck, unit, build and migration-order jobs. The pgTAP suite stopped before its assertions on a malformed synthetic organization UUID in one fixture; corrected that fixture. Database security assertions remain unverified until rerun.
 - 2026-11-22: CI run 45084694921 passed the browser, lint, typecheck, unit, build and migration-order jobs. pgTAP reached 66 of 74 assertions, but assertions 50, 53, 61 and 64 failed for foreign/anonymous list and detail access, and `set_organization_service_rate` raised an ambiguous `effective_start_date` error. Investigate both the security assertions and RPC before deploying; **do not apply 00018 to production** until the full database suite passes. Local `npm ci` remains incomplete because disk space was exhausted.
 - 2026-11-22: After disk space was freed, `npm ci`, `npm run quality` (475 tests, typecheck, lint and build) and `scripts/check-migrations.sh --base origin/main` passed. Qualified the rate update's column and parameter references. The denied-read test helper used `count(*)`, allowing PostgreSQL to discard scalar function calls; it now evaluates returned rows and has two self-checks. The 76-assertion database suite must pass in CI before deployment.
+- 2026-11-22: CI run 45085531238 passed every required job, including `supabase test db` (112 assertions across both files) and the existing Playwright suite. Owner-authorized `supabase db push --linked --yes` applied 00018 to the linked Daedalus production project; `supabase migration list --linked` confirms 00001–00018 and a subsequent dry run reports no pending migrations. Phase 6-specific authenticated browser role checks remain for the owner's walkthrough; do not mark the plan complete yet.
