@@ -1,7 +1,7 @@
 -- Authorization read boundaries after migration 00018. All fixtures are synthetic.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(74);
+select plan(76);
 
 create function pg_temp.mk_user(uid uuid, nm text) returns void language sql as $$
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -98,7 +98,7 @@ begin execute 'reset role'; end $$;
 create function pg_temp.read_denied(query text) returns boolean language plpgsql as $$
 declare n bigint;
 begin
-  execute 'select count(*) from (' || query || ') denied_rows' into n;
+  execute 'select count(row_to_json(denied_rows)) from (' || query || ') denied_rows' into n;
   return n = 0;
 exception
   when insufficient_privilege or raise_exception then return true;
@@ -113,6 +113,8 @@ grant select, insert on table created_rate to authenticated;
 select is(
   pg_get_function_result('public.create_authorization_with_services(uuid,uuid,uuid,date,date,text,text,jsonb)'::regprocedure),
   'uuid', 'creation returns only a UUID');
+select ok(not pg_temp.read_denied('select 1 as value'), 'denied-read helper rejects an allowed row');
+select ok(not pg_temp.read_denied('select null::text as value'), 'denied-read helper rejects an allowed null-valued row');
 
 select pg_temp.act_as('a0000000-0000-0000-0000-000000000002');
 select is((select count(*)::int from public.patient_authorizations), 1, 'scheduler sees its safe authorization row');

@@ -97,12 +97,13 @@ begin
     raise exception 'Organization service not found';
   end if;
 
-  update public.organization_service_rates
-  set effective_end_date = effective_start_date - 1
-  where organization_id = target_org_id
-    and organization_service_id = target_organization_service_id
-    and effective_start_date < set_organization_service_rate.effective_start_date
-    and (effective_end_date is null or effective_end_date >= set_organization_service_rate.effective_start_date);
+  update public.organization_service_rates existing_rate
+  set effective_end_date = set_organization_service_rate.effective_start_date - 1
+  where existing_rate.organization_id = target_org_id
+    and existing_rate.organization_service_id = target_organization_service_id
+    and existing_rate.effective_start_date < set_organization_service_rate.effective_start_date
+    and (existing_rate.effective_end_date is null
+      or existing_rate.effective_end_date >= set_organization_service_rate.effective_start_date);
 
   insert into public.organization_service_rates (
     organization_id,
