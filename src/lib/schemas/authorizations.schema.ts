@@ -116,7 +116,10 @@ export const UpsertAuthorizationServiceSchema = z.object({
   patientId: uuidShape,
   authorizationId: uuidShape,
   authorizationServiceId: uuidShape.optional(),
-}).extend(AuthorizationServiceInputSchema.shape).strict()
+}).extend(AuthorizationServiceInputSchema.shape).strict().refine(
+  (value) => !value.effective_end_date || !value.effective_start_date || value.effective_end_date >= value.effective_start_date,
+  'Effective end date must be on or after effective start date',
+)
 export type UpsertAuthorizationServiceInput = z.infer<typeof UpsertAuthorizationServiceSchema>
 
 export const DeactivateAuthorizationServiceSchema = z.object({

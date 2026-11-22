@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Typography from '@mui/material/Typography'
 import { requireAuth, getActiveMembership } from '@/lib/auth/server'
-import { hasPermission } from '@/lib/permissions'
+import { hasAnyPermission, hasPermission } from '@/lib/permissions'
 import {
   getPatient,
   listPatientAddresses,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/patients.service'
 import UnauthorizedMessage from '@/components/UnauthorizedMessage'
 import PatientCore from '../_components/PatientCore'
+import { listPatientAuthorizationsAction } from '../actions'
 
 interface PatientPageProps {
   params: Promise<{
@@ -39,6 +40,10 @@ export default async function PatientPage({ params }: PatientPageProps) {
   const addressesPromise = listPatientAddresses(orgId, patient.id, 4)
   const contactsPromise = listPatientContacts(orgId, patient.id, 4)
   const requirementsPromise = listPatientRequirements(orgId, patient.id, undefined, 4)
+  const canReadAuthorizations = await hasAnyPermission(orgId, ['authorizations.manage', 'shifts.manage'])
+  const authorizationsPromise = canReadAuthorizations
+    ? listPatientAuthorizationsAction(orgId, patient.id, { page: 0, pageSize: 10 })
+    : null
 
   return (
     <PatientCore
@@ -46,6 +51,7 @@ export default async function PatientPage({ params }: PatientPageProps) {
       addressesPromise={addressesPromise}
       contactsPromise={contactsPromise}
       requirementsPromise={requirementsPromise}
+      authorizationsPromise={authorizationsPromise}
     />
   )
 }

@@ -3,8 +3,10 @@ import {
   ActivateOrgServiceSchema,
   AuthorizationServiceInputSchema,
   CreateAuthorizationSchema,
+  DeactivateAuthorizationServiceSchema,
   SetOrganizationServiceRateSchema,
   UpdateAuthorizationSchema,
+  UpsertAuthorizationServiceSchema,
   UpsertPayerSchema,
 } from '@/lib/schemas/authorizations.schema'
 
@@ -57,6 +59,38 @@ describe('authorization schemas', () => {
       authorization_start_date: '2026-10-31',
       authorization_end_date: '2026-10-01',
     }).success).toBe(false)
+  })
+
+  it('validates authorization service upserts and deactivation identifiers', () => {
+    const service = {
+      organizationId: ORG_ID,
+      patientId: PATIENT_ID,
+      authorizationId: AUTHORIZATION_ID,
+      organization_service_id: SERVICE_ID,
+      authorized_quantity: 10,
+      quantity_unit: 'Hours' as const,
+      quantity_period: 'Week' as const,
+      rate_unit: 'Hour' as const,
+      effective_start_date: '2026-10-01',
+      effective_end_date: '2026-10-31',
+    }
+
+    expect(UpsertAuthorizationServiceSchema.safeParse(service).success).toBe(true)
+    expect(UpsertAuthorizationServiceSchema.safeParse({
+      ...service,
+      authorized_quantity: 0,
+    }).success).toBe(false)
+    expect(UpsertAuthorizationServiceSchema.safeParse({
+      ...service,
+      effective_start_date: '2026-10-31',
+      effective_end_date: '2026-10-01',
+    }).success).toBe(false)
+    expect(DeactivateAuthorizationServiceSchema.safeParse({
+      organizationId: ORG_ID,
+      patientId: PATIENT_ID,
+      authorizationId: AUTHORIZATION_ID,
+      authorizationServiceId: SERVICE_ID,
+    }).success).toBe(true)
   })
 
   it('requires an authorization update field and rejects unknown fields', () => {

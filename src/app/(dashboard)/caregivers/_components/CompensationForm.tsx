@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation'
 import useNotifications from '@/components/templates/crud-dashboard/hooks/useNotifications/useNotifications'
 import PageContainer from '@/components/templates/crud-dashboard/components/PageContainer'
 import { CAREGIVER_RATE_UNITS } from '@/lib/schemas/caregivers.schema'
-import type { Caregiver } from '@/types'
+import type { Caregiver, OrganizationServiceWithMapping } from '@/types'
 import { setCompensationRateAction } from '../actions'
 
 interface CompensationFormValues {
@@ -36,9 +36,10 @@ const EMPTY_VALUES: CompensationFormValues = {
 export interface CompensationFormProps {
   caregiver: Caregiver
   orgId: string
+  organizationServices: OrganizationServiceWithMapping[]
 }
 
-export default function CompensationForm({ caregiver, orgId }: CompensationFormProps) {
+export default function CompensationForm({ caregiver, orgId, organizationServices }: CompensationFormProps) {
   const router = useRouter()
   const notifications = useNotifications()
   const fullName = `${caregiver.first_name} ${caregiver.last_name}`.trim()
@@ -183,16 +184,25 @@ export default function CompensationForm({ caregiver, orgId }: CompensationFormP
           slotProps={{ inputLabel: { shrink: true } }}
         />
 
-        {/* TODO(phase-6/authorizations): replace with a Select of organization services. */}
-        <TextField
-          label="Organization Service ID (optional)"
-          value={values.organization_service_id}
-          onChange={(e) => handleChange('organization_service_id', e.target.value)}
-          error={!!errors.organization_service_id}
-          helperText={errors.organization_service_id ?? 'Leave empty for the caregiver default rate.'}
-          fullWidth
-          disabled={isSubmitting}
-        />
+        <FormControl fullWidth disabled={isSubmitting}>
+          <InputLabel id="organization-service-label">Organization Service (optional)</InputLabel>
+          <Select
+            labelId="organization-service-label"
+            label="Organization Service (optional)"
+            value={values.organization_service_id}
+            onChange={(e) => handleChange('organization_service_id', e.target.value)}
+          >
+            <MenuItem value="">Caregiver default rate</MenuItem>
+            {organizationServices.map((service) => (
+              <MenuItem value={service.id} key={service.id}>
+                {service.local_service_name ?? service.service_code_mapping.evv_service_name}
+              </MenuItem>
+            ))}
+          </Select>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, ml: 1.75 }}>
+            Leave empty to set a caregiver default rate.
+          </Typography>
+        </FormControl>
 
         <Box sx={{ width: '100%', mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip

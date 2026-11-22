@@ -16,7 +16,7 @@ import Typography from '@mui/material/Typography'
 import { useRouter } from 'next/navigation'
 import PageContainer from '@/components/templates/crud-dashboard/components/PageContainer'
 import { getPatientRequirementDisplayValue } from '@/lib/schemas/patients.schema'
-import type { Patient, PatientAddress, PatientContact, PatientRequirement } from '@/types'
+import type { ActionResponse, Patient, PatientAddress, PatientAuthorizationListPage, PatientContact, PatientRequirement } from '@/types'
 
 const ACTION_BUTTON_SX = {
   borderColor: 'divider',
@@ -118,6 +118,7 @@ export interface PatientCoreProps {
   addressesPromise: Promise<PatientAddress[]>
   contactsPromise: Promise<PatientContact[]>
   requirementsPromise: Promise<PatientRequirement[]>
+  authorizationsPromise?: Promise<ActionResponse<PatientAuthorizationListPage>> | null
 }
 
 const PREVIEW_ROW_LIMIT = 3
@@ -239,11 +240,41 @@ function RequirementPreview({
   )
 }
 
+function AuthorizationPreview({ resultPromise, patientId }: {
+  resultPromise: Promise<ActionResponse<PatientAuthorizationListPage>>
+  patientId: string
+}) {
+  const router = useRouter()
+  const result = React.use(resultPromise)
+  if (!result.success && result.error === 'Not authorized.') return null
+  return (
+    <InfoSection title="Patient Authorization" onEditClick={() => router.push(`/patients/${patientId}/authorization`)} buttonText="View">
+      <InfoRows>
+        {!result.success || !result.data ? (
+          <InfoRow label="Authorization">{result.error ?? 'Unable to load authorizations.'}</InfoRow>
+        ) : result.data.rows.length === 0 ? (
+          <InfoRow label="Authorization">No authorization information on file.</InfoRow>
+        ) : (
+          result.data.rows.slice(0, PREVIEW_ROW_LIMIT).map((row) => (
+            <InfoRow key={row.id} label={row.payer.payer_name}>
+              {row.effective_status} · {row.masked_prior_auth_number ?? 'No authorization number'}
+            </InfoRow>
+          ))
+        )}
+        {result.success && result.data && result.data.rowCount > PREVIEW_ROW_LIMIT && (
+          <ViewMore path={`/patients/${patientId}/authorization`} />
+        )}
+      </InfoRows>
+    </InfoSection>
+  )
+}
+
 export default function PatientCore({
   patient,
   addressesPromise,
   contactsPromise,
   requirementsPromise,
+  authorizationsPromise,
 }: PatientCoreProps) {
   const router = useRouter()
   const [isRefreshing, startRefresh] = React.useTransition()
@@ -331,14 +362,11 @@ export default function PatientCore({
             </React.Suspense>
           </InfoSection>
 
-          {/* TODO(phase-6/authorizations): hardcoded empty state. Plan §4.7 / §6 —
-              pass authorizations from the detail page and render payer / status /
-              authorization number after the authorization slice is implemented. */}
-          <InfoSection title="Patient Authorization" onEditClick={goTo('authorization')}>
-            <InfoRows>
-              <InfoRow label="Authorization">No authorization information on file.</InfoRow>
-            </InfoRows>
-          </InfoSection>
+          {authorizationsPromise && (
+            <React.Suspense fallback={null}>
+              <AuthorizationPreview resultPromise={authorizationsPromise} patientId={patient.id} />
+            </React.Suspense>
+          )}
 
           <InfoSection title="Requirements" onEditClick={goTo('requirement')}>
             <React.Suspense fallback={<InfoRows><PreviewFallback label="Requirement" /></InfoRows>}>

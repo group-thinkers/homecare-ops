@@ -34,7 +34,6 @@ export type PermissionCode =
   | 'call_offs.manage'
   | 'notifications.send'
   | 'dashboard.read'
-  | 'reports.read'
 
 export type PatientStatus = 'Intake' | 'Active' | 'Suspended' | 'Discharged' | 'Archived'
 
@@ -482,6 +481,11 @@ export type OrganizationService = {
   updated_by_user_id: string | null
 }
 
+export type OrganizationServicePublic = Omit<
+  OrganizationService,
+  'default_reimbursement_rate' | 'default_rate_unit'
+>
+
 export type PatientAuthorization = {
   id: string
   organization_id: string
@@ -519,6 +523,8 @@ export type AuthorizationService = {
   updated_at: string | null
 }
 
+export type AuthorizationServiceManagementRecord = Omit<AuthorizationService, 'restricted_note_id'>
+
 export type OrganizationServiceRate = {
   id: string
   organization_id: string
@@ -532,7 +538,15 @@ export type OrganizationServiceRate = {
   created_at: string
 }
 
-export type OrganizationServiceWithMapping = Omit<OrganizationService, 'default_reimbursement_rate'> & {
+export type OrganizationServiceRateListPage = {
+  rows: OrganizationServiceRate[]
+  rowCount: number
+}
+
+export type OrganizationServiceWithMapping = Omit<
+  OrganizationService,
+  'default_reimbursement_rate' | 'default_rate_unit'
+> & {
   service_code_mapping: Pick<
     ServiceCodeMapping,
     'id' | 'evv_service_id' | 'evv_service_name' | 'payer_type' | 'program_name'
@@ -551,7 +565,13 @@ export type OrganizationServiceListPage = {
   rowCount: number
 }
 
-export type PatientAuthorizationListItem = Omit<PatientAuthorization, 'encrypted_prior_auth_number'> & {
+export type PatientAuthorizationPublic = Omit<PatientAuthorization, 'encrypted_prior_auth_number'>
+
+export type PatientAuthorizationWithServices = PatientAuthorizationPublic & {
+  services: AuthorizationServiceManagementRecord[]
+}
+
+export type PatientAuthorizationListItem = PatientAuthorizationPublic & {
   payer: Pick<Payer, 'payer_name' | 'payer_type'>
   service_count: number
   effective_status: AuthorizationStatus
@@ -576,14 +596,32 @@ export type AuthorizationServiceCompatibility = {
   rate_source: 'authorization' | 'organization_default' | 'missing'
 }
 
-export type AuthorizationServiceWithEffectiveRate = AuthorizationService & {
-  organization_service: Pick<OrganizationService, 'local_service_name'>
-  effective_rate: EffectiveRate
+export type AuthorizationServiceForScheduling = Omit<
+  AuthorizationService,
+  'reimbursement_rate' | 'rate_unit' | 'restricted_note_id'
+> & {
+  local_service_name: string | null
 }
 
-export type PatientAuthorizationDetail = Omit<PatientAuthorization, 'encrypted_prior_auth_number'> & {
+export type EffectiveAuthorizationServiceRate = {
+  authorization_service_id: string
+  reimbursement_rate: number | null
+  rate_unit: RateUnit | null
+  source: EffectiveRate['source']
+}
+
+export type AuthorizationServiceWithEffectiveRate = Omit<
+  AuthorizationService,
+  'reimbursement_rate' | 'rate_unit' | 'restricted_note_id'
+> & {
+  organization_service: Pick<OrganizationService, 'local_service_name'>
+  effective_rate: EffectiveRate | null
+}
+
+export type PatientAuthorizationDetail = PatientAuthorizationPublic & {
   payer: Pick<Payer, 'payer_name' | 'payer_type'>
   services: AuthorizationServiceWithEffectiveRate[]
+  service_count: number
   effective_status: AuthorizationStatus
 }
 
@@ -1015,7 +1053,16 @@ export type Database = {
           prior_auth_number?: string | null
           services?: Record<string, unknown>[]
         }
-        Returns: PatientAuthorization
+        Returns: string
+      }
+      list_patient_authorizations_for_patient: {
+        Args: {
+          target_org_id: string
+          target_patient_id: string
+          page_offset: number
+          page_size: number
+        }
+        Returns: PatientAuthorizationListPage
       }
       check_authorization_service_compatibility: {
         Args: {
@@ -1044,6 +1091,36 @@ export type Database = {
           service_date: string
         }
         Returns: (Pick<OrganizationServiceRate, 'organization_service_id' | 'reimbursement_rate' | 'rate_unit'>)[]
+      }
+      list_active_authorization_services_for_patient: {
+        Args: {
+          target_org_id: string
+          target_patient_id: string
+          on_date: string
+          page_offset: number
+          page_size: number
+        }
+        Returns: AuthorizationServiceForScheduling[]
+      }
+      get_patient_authorization_detail: {
+        Args: {
+          target_org_id: string
+          target_patient_id: string
+          target_authorization_id: string
+          service_date: string
+          service_offset: number
+          service_limit: number
+          target_service_id: string | null
+        }
+        Returns: PatientAuthorizationDetail
+      }
+      resolve_effective_authorization_service_rates: {
+        Args: {
+          target_org_id: string
+          target_authorization_service_ids: string[]
+          service_date: string
+        }
+        Returns: EffectiveAuthorizationServiceRate[]
       }
       create_caregiver: {
         Args: {
