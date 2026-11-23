@@ -11,7 +11,7 @@
 > Optional but recommended after each deploy: `npm run db:dump` (see `docs/MIGRATIONS.md`) regenerates
 > `supabase/schema.sql` from the live DB so you can diff it against this document.
 
-**Applied through:** `00017_authorization_rate_security.sql`
+**Production applied through:** `00018_authorization_read_boundaries.sql` (applied via Supabase CLI on 2026-11-22)
 **Migration files:** `supabase/migrations/` (sequential `000NN_snake_case.sql`)
 **Types mirror:** `src/types/index.ts` (hand-written — keep in sync)
 
@@ -39,7 +39,7 @@
 - **RLS is enabled on every table.** All policies are `to authenticated`. `anon` has no policies → sees nothing.
 - Policies delegate to three `security definer` helpers (§6): `is_org_member(org_id)`, `is_org_admin(org_id)`, `has_org_permission(org_id, perm_code)`.
 - `has_org_permission` = (any of the member's `roles` has the permission in `role_permission_defaults`) **OR** (an unexpired, unrevoked row in `membership_permission_grants`).
-- **Grants (00002/00007):** `authenticated` has `all` on all tables/sequences/routines in `public` — RLS is the only guard. Every new function must explicitly `revoke all ... from public; grant execute ... to authenticated;`.
+- **Grants (00002/00007):** `authenticated` broadly has `all` on public tables/sequences/routines. RLS is the row guard; migration 00018 additionally revokes table-level `SELECT` on authorization-bearing tables and grants only safe columns. Authorization service-line rates are exposed through financial-permission RPCs; organization-service rate history remains RLS-gated by `authorizations.manage` or `authorizations.read_rates`. Every new function must explicitly `revoke all ... from public; grant execute ... to authenticated;`.
 - **Tables with NO authenticated INSERT/UPDATE policy** (writes must go through a `security definer` RPC, or the service-role admin client):
 
 | Table | Missing for `authenticated` | Intended writer |
@@ -75,7 +75,6 @@
 | `call_offs.manage` | ✅ | ✅ | | | |
 | `notifications.send` | ✅ | ✅ | | ✅ | |
 | `dashboard.read` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `reports.read` | — not seeded for any role (exists in `PermissionCode` type only) | | | | |
 
 Notes:
 - Scheduler reads caregivers/availability/eligibility via `shifts.manage` / `matching.run` OR-clauses in those policies — no `caregivers.manage` needed.
@@ -756,9 +755,9 @@ All `to authenticated`. `R` = SELECT, `I` = INSERT, `U` = UPDATE. No table has D
 | billing_services / service_code_mappings / matching_rulesets / notification_templates | `active = true` | — | — |
 | patients / patient_addresses / patient_contacts | `perm(patients.read_basic)` | `perm(patients.manage)` | `perm(patients.manage)` |
 | patient_requirements | Operational rows: `perm(patients.read_basic)`; Clinical/Restricted rows: `perm(patients.read_clinical)` | `perm(patients.manage)` | `perm(patients.manage)` |
-| payers / organization_services | `is_org_member` | `perm(authorizations.manage)` | `perm(authorizations.manage)` |
-| patient_authorizations | `perm(authorizations.manage) or perm(shifts.manage)` (00016) | `perm(authorizations.manage)` | `perm(authorizations.manage)` |
-| authorization_services | `perm(authorizations.manage) or perm(shifts.manage)` | `perm(authorizations.manage)` | `perm(authorizations.manage)` |
+| payers / organization_services | `is_org_member` | `perm(authorizations.manage)` | `perm(authorizations.manage)`; 00018 denies direct reads of legacy reimbursement rate/unit columns |
+| patient_authorizations | `perm(authorizations.manage) or perm(shifts.manage)` (00016) | `perm(authorizations.manage)` | `perm(authorizations.manage)`; 00018 denies direct reads of `encrypted_prior_auth_number` |
+| authorization_services | `perm(authorizations.manage) or perm(shifts.manage)` | `perm(authorizations.manage)` | `perm(authorizations.manage)`; 00018 denies direct reads of reimbursement rate and unit |
 | organization_service_rates | `perm(authorizations.manage) or perm(authorizations.read_rates)` | — (RPC) | — (RPC) |
 | caregivers | `perm(caregivers.manage) or perm(shifts.manage) or perm(matching.run)` | `perm(caregivers.manage)` | `perm(caregivers.manage)` |
 | caregiver_compensation_rates | `perm(caregivers.read_compensation)` | `perm(caregivers.manage) and perm(caregivers.read_compensation)` | same as I |
@@ -775,7 +774,7 @@ All `to authenticated`. `R` = SELECT, `I` = INSERT, `U` = UPDATE. No table has D
 | travel_result_cache | `is_org_member` | — (RPC/admin) | — |
 | operational_history_events | `perm(dashboard.read)` | — (RPC) | — |
 
-Schedulers with `shifts.manage` can read both authorization parents and services (00016), but authorization mutations remain restricted to `authorizations.manage`.
+Schedulers with `shifts.manage` can read safe authorization parent/service columns, but cannot select `encrypted_prior_auth_number`, reimbursement amounts, or rate units directly. The safe `list_active_authorization_services_for_patient` and `check_authorization_service_compatibility` RPCs support scheduling; raw effective rates require `authorizations.manage` or `authorizations.read_rates`. Authorization mutations remain restricted to `authorizations.manage`.
 
 ---
 
@@ -836,20 +835,31 @@ Also in 00014: `alter table caregiver_availability_exceptions add column active 
 ### 6.7 Authorization RPCs (00016)
 | Function | Args | Returns | Notes |
 |---|---|---|---|
-| `create_authorization_with_services` | `(target_org_id uuid, target_patient_id uuid, target_payer_id uuid, authorization_start_date date, authorization_end_date date, status text default 'Active', prior_auth_number text default null, services jsonb default '[]')` | `patient_authorizations` | validates caller, patient, payer, service scope, dates, and enum values; creates authorization plus service rows atomically; masks prior auth number |
+| `create_authorization_with_services` | `(target_org_id uuid, target_patient_id uuid, target_payer_id uuid, authorization_start_date date, authorization_end_date date, status text default 'Active', prior_auth_number text default null, services jsonb default '[]')` | `uuid` | validates caller, patient, payer, service scope, dates, and enum values; creates authorization plus service rows atomically; masks prior auth number; 00018 returns only the new ID |
 
 ### 6.8 Authorization rate security and history (00017)
 | Function | Args | Returns | Notes |
 |---|---|---|---|
 | `check_authorization_service_compatibility` | `(target_org_id, target_patient_id, target_organization_service_id, service_date)` | authorization/service/rate flags and safe reason/source codes | scheduler-safe; requires `authorizations.manage` or `shifts.manage`; never returns a monetary amount or unit |
-| `set_organization_service_rate` | `(target_org_id, target_organization_service_id, reimbursement_rate, rate_unit, effective_start_date, change_reason)` | `organization_service_rates` | `authorizations.manage`; prospective only; closes the prior period, inserts a version, and records an operational event atomically |
+| `set_organization_service_rate` | `(target_org_id, target_organization_service_id, reimbursement_rate, rate_unit, effective_start_date, change_reason)` | `organization_service_rates` | `authorizations.manage`; prospective only; closes the prior period and inserts a version atomically; 00018 keeps amounts and free-text reasons out of event metadata |
 | `get_effective_organization_service_rates` | `(target_org_id, target_organization_service_ids uuid[], service_date)` | effective rate rows | batched raw-rate lookup for authorized detail pages |
+
+### 6.9 Authorization read boundaries (00018)
+| Function | Args | Returns | Notes |
+|---|---|---|---|
+| `create_authorization_with_services` | same signature as 00016 | `uuid` | internal row-returning RPC is revoked from app roles; public RPC returns only the new ID |
+| `list_active_authorization_services_for_patient` | `(target_org_id uuid, target_patient_id uuid, on_date date, page_offset integer default 0, page_size integer default 100)` | safe service-line page | `authorizations.manage` or `shifts.manage`; page size is capped at 100; omits amount, rate unit, and restricted-note id |
+| `list_patient_authorizations_for_patient` | `(target_org_id uuid, target_patient_id uuid, page_offset integer, page_size integer)` | JSON page with safe rows and total count | bounded page; status expiry is derived in SQL, never written |
+| `get_patient_authorization_detail` | `(target_org_id uuid, target_patient_id uuid, target_authorization_id uuid, service_date date, service_offset integer default 0, service_limit integer default 25, target_service_id uuid default null)` | JSON detail read model with active-service count | one bounded read; service rows are paginated (limit capped at 100), or one requested service is returned for editing; effective rates are included only for financial readers |
+| `resolve_effective_authorization_service_rates` | `(target_org_id uuid, target_authorization_service_ids uuid[], service_date date)` | rate/source rows | `authorizations.manage` or `authorizations.read_rates`; batched lookup for other consumers |
+
+Migration 00018 removes table-level `SELECT` on `patient_authorizations`, `authorization_services`, and `organization_services` from `authenticated`, then grants only safe columns. `encrypted_prior_auth_number`, reimbursement amounts, and rate units cannot be selected directly by app users. It grants read-only access to `organization_service_rates`; that table's RLS policy still limits rows to financial readers. Authorization detail and scheduler service reads are bounded and paginated; a detail request can also select one active service line for its edit form. Effective rates are included only when the caller has `authorizations.manage` or `authorizations.read_rates`. A database trigger enforces the authorization status-transition matrix on direct table updates as well as server actions.
 
 ---
 
 ## 7. `Database` type in `src/types/index.ts` — RPC signatures registered
 
-`has_org_permission, is_org_member, is_org_admin, can_manage_org_users, create_org_invite, complete_org_invite, create_org_member, list_pending_org_invites, delete_org_invite, suspend_org_member, unsuspend_org_member, set_org_member_roles, revoke_org_member, create_patient_with_address, upsert_patient_requirement, list_patient_requirements_by_visibility, can_manage_org_caregivers, can_read_org_compensation, create_caregiver, upsert_caregiver_availability, set_caregiver_compensation_rate, mark_expired_credentials, can_manage_org_authorizations, can_read_org_authorizations, can_read_org_authorization_rates, create_authorization_with_services, check_authorization_service_compatibility, set_organization_service_rate, get_effective_organization_service_rates`.
+`has_org_permission, is_org_member, is_org_admin, can_manage_org_users, create_org_invite, complete_org_invite, create_org_member, list_pending_org_invites, delete_org_invite, suspend_org_member, unsuspend_org_member, set_org_member_roles, revoke_org_member, create_patient_with_address, upsert_patient_requirement, list_patient_requirements_by_visibility, can_manage_org_caregivers, can_read_org_compensation, create_caregiver, upsert_caregiver_availability, set_caregiver_compensation_rate, mark_expired_credentials, can_manage_org_authorizations, can_read_org_authorizations, can_read_org_authorization_rates, enforce_authorization_status_transition, create_authorization_with_services, check_authorization_service_compatibility, set_organization_service_rate, get_effective_organization_service_rates, list_active_authorization_services_for_patient, list_patient_authorizations_for_patient, get_patient_authorization_detail, resolve_effective_authorization_service_rates`.
 
 **All RPCs are registered** — no `rpc()` call uses `as never`. Every new RPC must be added to `Database.public.Functions` so the cast stays unnecessary.
 
@@ -882,7 +892,7 @@ Reference data present in the live DB: `billing_services` (16 rows), `service_co
 | `matching_rulesets` | table exists | missing from `Database.Tables` and no row type | add `MatchingRuleset` type when Phase 3/8 seeds it |
 | `call_off_outreach_events.contact_method` | `Phone, Text, Email, Other` | typed as `CallOffReportSource` (includes `Internal`) | add `OutreachContactMethod` type |
 | `caregiver_constraints.matching_effect` | `Exclude, Review Required, Preference` | inline literal ✔ | patient side uses `Preferred` — don't share the enum |
-| `PermissionCode 'reports.read'` | not seeded to any role | present | harmless; leave |
+| `PermissionCode 'reports.read'` | not seeded or used | removed by owner decision (2026-11-22) | no app role or product surface uses it |
 | `Database.Functions` | all RPCs registered ✔ | see §7 | none — keep new RPCs registered |
 
 ---
@@ -896,7 +906,9 @@ No new **tables** are expected for Phases 5–9; the schema is complete. Expecte
 | 5 | `00014_caregiver_rpcs.sql` | **APPLIED** — `create_caregiver`, `upsert_caregiver_availability`, `set_caregiver_compensation_rate` (closes prior active rate), `mark_expired_credentials`, helpers `can_manage_org_caregivers` / `can_read_org_compensation`, `caregiver_availability_exceptions.active`. Credentials/skills/eligibility are plain RLS-guarded writes, so no `upsert_caregiver_credential` RPC was needed. |
 | 5 | `00015_drop_caregiver_availability_exceptions.sql` | **APPLIED** — drops `caregiver_availability_exceptions` (redundant with `caregiver_availability` effective date ranges) |
 | 6 | `00016_authorization_rpcs.sql` | `create_authorization_with_services`; lets `shifts.manage` read `patient_authorizations` |
-| 7 | `00017_shift_rpcs.sql` | `confirm_shift_assignment` (version check, conflict check, history insert), `cancel_shift`, `set_shift_coverage`, `record_operational_event` |
-| 3 | `00018_seed_rulesets_and_templates.sql` | insert `matching_rulesets` v1 + 4 `notification_templates` |
-| 8 | `00019_matching_rpcs.sql` | `persist_matching_run(run jsonb, candidates jsonb)` (inserts run + candidates, sets Completed), `upsert_travel_cache` |
-| 9 | `00020_call_off_rpcs.sql` | `report_call_off`, `confirm_replacement`, `mark_call_off_unresolved`; partial unique index one-active-call-off-per-shift |
+| 6 | `00017_authorization_rate_security.sql` | effective-dated organization rates and scheduler-safe compatibility |
+| 6 | `00018_authorization_read_boundaries.sql` | restrict sensitive column reads; safe scheduling and financial rate RPCs; rate events omit amounts and free-text reasons |
+| 3 | `00019_seed_rulesets_and_templates.sql` | insert `matching_rulesets` v1 + 4 `notification_templates` |
+| 7 | `00020_shift_rpcs.sql` | `confirm_shift_assignment` (version check, conflict check, history insert), `cancel_shift`, `set_shift_coverage`, `record_operational_event` |
+| 8 | `00021_matching_rpcs.sql` | `persist_matching_run(run jsonb, candidates jsonb)` (inserts run + candidates, sets Completed), `upsert_travel_cache` |
+| 9 | `00022_call_off_rpcs.sql` | `report_call_off`, `confirm_replacement`, `mark_call_off_unresolved`; partial unique index one-active-call-off-per-shift |

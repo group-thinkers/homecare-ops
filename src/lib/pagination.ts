@@ -1,6 +1,28 @@
 export const DEFAULT_PAGE_SIZE = 10
 export const PAGE_SIZE_OPTIONS = [5, 10, 25] as const
 
+export async function fetchAllPages<T>(
+  fetchPage: (page: number, pageSize: number) => Promise<{ rows: T[]; rowCount: number }>,
+): Promise<T[]> {
+  const pageSize = PAGE_SIZE_OPTIONS[2]
+  const rows: T[] = []
+  let page = 0
+  let rowCount = 0
+
+  do {
+    const result = await fetchPage(page, pageSize)
+    rows.push(...result.rows)
+    rowCount = result.rowCount
+    page += 1
+    if (result.rows.length === 0) {
+      if (rows.length < rowCount) throw new Error('Unable to load all paginated options.')
+      break
+    }
+  } while (rows.length < rowCount)
+
+  return rows
+}
+
 type PaginationSearchParams = {
   page?: string | string[]
   pageSize?: string | string[]

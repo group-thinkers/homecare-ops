@@ -7,6 +7,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import CssBaseline from '@mui/material/CssBaseline';
 import AccessibleIcon from '@mui/icons-material/Accessible';
 import BadgeIcon from '@mui/icons-material/Badge';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 
 import DashboardLayout from '@/components/templates/crud-dashboard/components/DashboardLayout';
 import NotificationsProvider from '@/components/templates/crud-dashboard/hooks/useNotifications/NotificationsProvider';
@@ -52,6 +54,20 @@ const navigation: NavigationItem[] = [
     title: 'Users',
     icon: <PersonIcon />,
     href: '/settings/users',
+  },
+  {
+    kind: 'page',
+    id: 'payer-settings',
+    title: 'Payers',
+    icon: <AccountBalanceIcon />,
+    href: '/settings/payers',
+  },
+  {
+    kind: 'page',
+    id: 'service-settings',
+    title: 'Services',
+    icon: <MedicalServicesIcon />,
+    href: '/settings/services',
   },
   {
     kind: 'page',

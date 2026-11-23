@@ -1,8 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAuth } from '@/lib/auth/server'
-import { requirePermission } from '@/lib/permissions'
+import { AuthError, requireAuth } from '@/lib/auth/server'
+import { requireAnyPermission, requirePermission } from '@/lib/permissions'
+import { fetchAllPages } from '@/lib/pagination'
 import {
   CreatePatientSchema,
   UpdatePatientSchema,
@@ -14,10 +15,26 @@ import {
   UpsertPatientContactSchema,
   DeactivatePatientContactSchema,
 } from '@/lib/schemas/patients.schema'
+import {
+  ArchiveAuthorizationSchema,
+  CreateAuthorizationSchema,
+  DeactivateAuthorizationServiceSchema,
+  UpdateAuthorizationSchema,
+  UpsertAuthorizationServiceSchema,
+} from '@/lib/schemas/authorizations.schema'
 import * as patientsService from '@/lib/services/patients.service'
+import * as authorizationsService from '@/lib/services/authorizations.service'
 import type {
   ActionResponse,
+  AuthorizationServiceManagementRecord,
+  AuthorizationServiceCompatibility,
+  AuthorizationServiceForScheduling,
   Patient,
+  PatientAuthorizationDetail,
+  PatientAuthorizationListPage,
+  PatientAuthorizationPublic,
+  OrganizationServiceWithMapping,
+  Payer,
   PatientRequirement,
   PatientAddress,
   PatientContact,
@@ -375,5 +392,295 @@ export async function deactivatePatientContactAction(input: unknown): Promise<Ac
   } catch (err) {
     console.error('[deactivatePatientContactAction] failed:', { error: err })
     return { success: false, error: err instanceof Error ? err.message : 'Unable to complete this action.' }
+  }
+}
+
+type AuthorizationFormOptions = {
+  payers: Pick<Payer, 'id' | 'payer_name' | 'payer_type' | 'status'>[]
+  organizationServices: OrganizationServiceWithMapping[]
+}
+
+function authorizationActionError(error: unknown): string {
+  if (error instanceof AuthError) return 'Not authorized.'
+  const safeMessages = new Set([
+    'Authorization not found',
+    'Authorization could not be created',
+    'Invalid authorization status transition',
+    'Authorization service not found',
+  ])
+  if (error instanceof Error && safeMessages.has(error.message)) return error.message
+  return 'Unable to complete this action.'
+}
+
+export async function listPatientAuthorizationsAction(
+  orgId: string,
+  patientId: string,
+  filters?: { page?: number; pageSize?: number },
+): Promise<ActionResponse<PatientAuthorizationListPage>> {
+  try {
+    await requireAuth()
+    await requireAnyPermission(orgId, ['authorizations.manage', 'shifts.manage'])
+    const data = await authorizationsService.listPatientAuthorizations(orgId, patientId, filters)
+    return { success: true, data }
+  } catch (error) {
+    console.error('[listPatientAuthorizationsAction] failed:', { orgId, patientId, filters, error })
+    return {
+      success: false,
+      error: error instanceof AuthError ? 'Not authorized.' : 'Unable to load authorizations.',
+    }
+  }
+}
+
+export async function getAuthorizationAction(
+  orgId: string,
+  patientId: string,
+  authorizationId: string,
+  serviceDate?: string,
+  serviceOffset = 0,
+  targetServiceId: string | null = null,
+): Promise<ActionResponse<PatientAuthorizationDetail | null>> {
+  try {
+    await requireAuth()
+    await requireAnyPermission(orgId, ['authorizations.manage', 'shifts.manage'])
+    const data = await authorizationsService.getAuthorizationDetail(
+      orgId,
+      patientId,
+      authorizationId,
+      serviceDate,
+      serviceOffset,
+      targetServiceId,
+    )
+    return { success: true, data }
+  } catch (error) {
+    console.error('[getAuthorizationDetailAction] failed:', { orgId, patientId, authorizationId, error })
+    return {
+      success: false,
+      error: error instanceof AuthError ? 'Not authorized.' : 'Unable to load authorization detail.',
+    }
+  }
+}
+
+export async function listAuthorizationFormOptionsAction(
+  orgId: string,
+): Promise<ActionResponse<AuthorizationFormOptions>> {
+  try {
+    await requireAuth()
+    await requirePermission(orgId, 'authorizations.manage')
+    const [payers, services] = await Promise.all([
+      fetchAllPages((page, pageSize) => authorizationsService.listPayers(orgId, {
+        page,
+        pageSize,
+        includeInactive: true,
+      })),
+      fetchAllPages((page, pageSize) => authorizationsService.listOrgServices(orgId, {
+        page,
+        pageSize,
+        includeDisabled: true,
+      })),
+    ])
+    return {
+      success: true,
+      data: {
+        payers: payers.map(({ id, payer_name, payer_type, status }) => ({ id, payer_name, payer_type, status })),
+        organizationServices: services,
+      },
+    }
+  } catch (error) {
+    console.error('[listAuthorizationFormOptionsAction] failed:', { orgId, error })
+    return {
+      success: false,
+      error: error instanceof AuthError ? 'Not authorized.' : 'Unable to load authorization form options.',
+    }
+  }
+}
+
+export async function createAuthorizationAction(input: unknown): Promise<ActionResponse<string>> {
+  try {
+    await requireAuth()
+    const parsed = CreateAuthorizationSchema.safeParse(input)
+    if (!parsed.success) {
+      console.error('[createAuthorizationAction] validation failed:', parsed.error.flatten())
+      return { success: false, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+    await requirePermission(parsed.data.organizationId, 'authorizations.manage')
+    const data = await authorizationsService.createAuthorization(parsed.data.organizationId, {
+      patientId: parsed.data.patientId,
+      payer_id: parsed.data.payer_id,
+      authorization_start_date: parsed.data.authorization_start_date,
+      authorization_end_date: parsed.data.authorization_end_date,
+      status: parsed.data.status,
+      prior_auth_number: parsed.data.prior_auth_number,
+      services: parsed.data.services,
+    })
+    revalidatePath(`/patients/${parsed.data.patientId}/authorization`)
+    return { success: true, data }
+  } catch (error) {
+    console.error('[createAuthorizationAction] failed:', { error })
+    return { success: false, error: authorizationActionError(error) }
+  }
+}
+
+export async function updateAuthorizationAction(input: unknown): Promise<ActionResponse<PatientAuthorizationPublic>> {
+  try {
+    const user = await requireAuth()
+    const parsed = UpdateAuthorizationSchema.safeParse(input)
+    if (!parsed.success) {
+      console.error('[updateAuthorizationAction] validation failed:', parsed.error.flatten())
+      return { success: false, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+    await requirePermission(parsed.data.organizationId, 'authorizations.manage')
+    const data = await authorizationsService.updateAuthorization(
+      parsed.data.organizationId,
+      user.id,
+      {
+        authorizationId: parsed.data.authorizationId,
+        payer_id: parsed.data.payer_id,
+        authorization_start_date: parsed.data.authorization_start_date,
+        authorization_end_date: parsed.data.authorization_end_date,
+        status: parsed.data.status,
+      },
+    )
+    revalidatePath(`/patients/${parsed.data.patientId}/authorization/${parsed.data.authorizationId}`)
+    return { success: true, data }
+  } catch (error) {
+    console.error('[updateAuthorizationAction] failed:', { error })
+    return { success: false, error: authorizationActionError(error) }
+  }
+}
+
+export async function archiveAuthorizationAction(input: unknown): Promise<ActionResponse> {
+  try {
+    const user = await requireAuth()
+    const parsed = ArchiveAuthorizationSchema.safeParse(input)
+    if (!parsed.success) {
+      console.error('[archiveAuthorizationAction] validation failed:', parsed.error.flatten())
+      return { success: false, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+    await requirePermission(parsed.data.organizationId, 'authorizations.manage')
+    await authorizationsService.archiveAuthorization(parsed.data.organizationId, user.id, {
+      authorizationId: parsed.data.authorizationId,
+    })
+    revalidatePath(`/patients/${parsed.data.patientId}/authorization`)
+    return { success: true }
+  } catch (error) {
+    console.error('[archiveAuthorizationAction] failed:', { error })
+    return { success: false, error: authorizationActionError(error) }
+  }
+}
+
+export async function upsertAuthorizationServiceAction(
+  input: unknown,
+): Promise<ActionResponse<AuthorizationServiceManagementRecord>> {
+  try {
+    await requireAuth()
+    const parsed = UpsertAuthorizationServiceSchema.safeParse(input)
+    if (!parsed.success) {
+      console.error('[upsertAuthorizationServiceAction] validation failed:', parsed.error.flatten())
+      return { success: false, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+    await requirePermission(parsed.data.organizationId, 'authorizations.manage')
+    const data = await authorizationsService.upsertAuthorizationService(parsed.data.organizationId, {
+      authorizationId: parsed.data.authorizationId,
+      authorizationServiceId: parsed.data.authorizationServiceId,
+      organization_service_id: parsed.data.organization_service_id,
+      authorized_quantity: parsed.data.authorized_quantity,
+      quantity_unit: parsed.data.quantity_unit,
+      quantity_period: parsed.data.quantity_period,
+      reimbursement_rate: parsed.data.reimbursement_rate,
+      rate_unit: parsed.data.rate_unit,
+      service_requirement_code: parsed.data.service_requirement_code,
+      effective_start_date: parsed.data.effective_start_date,
+      effective_end_date: parsed.data.effective_end_date,
+    })
+    revalidatePath(`/patients/${parsed.data.patientId}/authorization/${parsed.data.authorizationId}`)
+    return { success: true, data }
+  } catch (error) {
+    console.error('[upsertAuthorizationServiceAction] failed:', { error })
+    return { success: false, error: authorizationActionError(error) }
+  }
+}
+
+export async function deactivateAuthorizationServiceAction(input: unknown): Promise<ActionResponse> {
+  try {
+    await requireAuth()
+    const parsed = DeactivateAuthorizationServiceSchema.safeParse(input)
+    if (!parsed.success) {
+      console.error('[deactivateAuthorizationServiceAction] validation failed:', parsed.error.flatten())
+      return { success: false, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+    }
+    await requirePermission(parsed.data.organizationId, 'authorizations.manage')
+    await authorizationsService.deactivateAuthorizationService(parsed.data.organizationId, {
+      authorizationId: parsed.data.authorizationId,
+      authorizationServiceId: parsed.data.authorizationServiceId,
+    })
+    revalidatePath(`/patients/${parsed.data.patientId}/authorization/${parsed.data.authorizationId}`)
+    return { success: true }
+  } catch (error) {
+    console.error('[deactivateAuthorizationServiceAction] failed:', { error })
+    return { success: false, error: authorizationActionError(error) }
+  }
+}
+
+export async function checkAuthorizationServiceCompatibilityAction(
+  orgId: string,
+  patientId: string,
+  organizationServiceId: string,
+  serviceDate: string,
+): Promise<ActionResponse<AuthorizationServiceCompatibility>> {
+  try {
+    await requireAuth()
+    await requireAnyPermission(orgId, ['authorizations.manage', 'shifts.manage'])
+    const data = await authorizationsService.checkAuthorizationServiceCompatibility(
+      orgId,
+      patientId,
+      organizationServiceId,
+      serviceDate,
+    )
+    return { success: true, data }
+  } catch (error) {
+    console.error('[checkAuthorizationServiceCompatibilityAction] failed:', {
+      orgId,
+      patientId,
+      organizationServiceId,
+      error,
+    })
+    return {
+      success: false,
+      error: error instanceof AuthError ? 'Not authorized.' : 'Unable to check service compatibility.',
+    }
+  }
+}
+
+export async function listActiveAuthorizationServicesForPatientAction(
+  orgId: string,
+  patientId: string,
+  onDate: string,
+  page = 0,
+  pageSize = 100,
+): Promise<ActionResponse<AuthorizationServiceForScheduling[]>> {
+  try {
+    await requireAuth()
+    await requireAnyPermission(orgId, ['authorizations.manage', 'shifts.manage'])
+    const data = await authorizationsService.listActiveAuthorizationServicesForPatient(
+      orgId,
+      patientId,
+      onDate,
+      page,
+      pageSize,
+    )
+    return { success: true, data }
+  } catch (error) {
+    console.error('[listActiveAuthorizationServicesForPatientAction] failed:', {
+      orgId,
+      patientId,
+      onDate,
+      page,
+      pageSize,
+      error,
+    })
+    return {
+      success: false,
+      error: error instanceof AuthError ? 'Not authorized.' : 'Unable to load active authorization services.',
+    }
   }
 }

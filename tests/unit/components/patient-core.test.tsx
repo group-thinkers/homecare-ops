@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -103,5 +103,16 @@ describe('PatientCore previews', () => {
 
     fireEvent.click(viewMoreButtons[0])
     expect(push).toHaveBeenCalledWith(`/patients/${PATIENT_ID}/contact`)
+  })
+
+  it('hides the authorization section if the read is denied', async () => {
+    render(
+      <PatientCore patient={patient} addressesPromise={Promise.resolve([])}
+        contactsPromise={Promise.resolve([])} requirementsPromise={Promise.resolve([])}
+        authorizationsPromise={Promise.resolve({ success: false, error: 'Not authorized.' })} />,
+    )
+    await waitFor(() => expect(screen.getByText('No contact information on file.')).toBeInTheDocument())
+    expect(screen.queryByText('Patient Authorization')).not.toBeInTheDocument()
+    expect(screen.queryByText('No authorization information on file.')).not.toBeInTheDocument()
   })
 })

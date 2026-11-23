@@ -1,19 +1,20 @@
 import { createClient } from '@/lib/db/client'
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/lib/pagination'
+import { DEFAULT_PAGE_SIZE, fetchAllPages, PAGE_SIZE_OPTIONS } from '@/lib/pagination'
 import type {
   AuthorizationService,
   AuthorizationServiceCompatibility,
-  AuthorizationServiceWithEffectiveRate,
+  AuthorizationServiceForScheduling,
+  AuthorizationServiceManagementRecord,
   AuthorizationStatus,
   EffectiveRate,
-  OrganizationService,
+  OrganizationServicePublic,
   OrganizationServiceRate,
+  OrganizationServiceRateListPage,
   OrganizationServiceListPage,
   OrganizationServiceWithMapping,
-  PatientAuthorization,
   PatientAuthorizationDetail,
-  PatientAuthorizationListItem,
   PatientAuthorizationListPage,
+  PatientAuthorizationPublic,
   Payer,
   PayerListPage,
 } from '@/types'
@@ -43,7 +44,6 @@ const ORGANIZATION_SERVICE_LIST_COLUMNS = `
   organization_id,
   service_code_mapping_id,
   local_service_name,
-  default_rate_unit,
   requires_clinical_approval,
   enabled,
   created_at,
@@ -64,7 +64,20 @@ const ORGANIZATION_SERVICE_LIST_COLUMNS = `
   )
 `
 
-const AUTHORIZATION_LIST_COLUMNS = `
+const ORGANIZATION_SERVICE_RETURN_COLUMNS = `
+  id,
+  organization_id,
+  service_code_mapping_id,
+  local_service_name,
+  requires_clinical_approval,
+  enabled,
+  created_at,
+  created_by_user_id,
+  updated_at,
+  updated_by_user_id
+`
+
+const PATIENT_AUTHORIZATION_PUBLIC_COLUMNS = `
   id,
   organization_id,
   patient_id,
@@ -78,14 +91,23 @@ const AUTHORIZATION_LIST_COLUMNS = `
   created_by_user_id,
   updated_at,
   updated_by_user_id,
-  archived_at,
-  payer:payers(
-    payer_name,
-    payer_type
-  ),
-  services:authorization_services(
-    id
-  )
+  archived_at
+`
+
+const AUTHORIZATION_SERVICE_SAFE_COLUMNS = `
+  id,
+  organization_id,
+  authorization_id,
+  organization_service_id,
+  authorized_quantity,
+  quantity_unit,
+  quantity_period,
+  service_requirement_code,
+  effective_start_date,
+  effective_end_date,
+  active,
+  created_at,
+  updated_at
 `
 
 export const ALLOWED_AUTH_TRANSITIONS: Record<AuthorizationStatus, AuthorizationStatus[]> = {
@@ -104,10 +126,6 @@ function pagination(filters?: { page?: number; pageSize?: number }): { rangeStar
     ? requestedPageSize
     : DEFAULT_PAGE_SIZE
   return { rangeStart: page * pageSize, rangeEnd: page * pageSize + pageSize - 1 }
-}
-
-function effectiveStatus(status: AuthorizationStatus, endDate: string, today = new Date().toISOString().slice(0, 10)): AuthorizationStatus {
-  return endDate < today && (status === 'Active' || status === 'Pending Recertification') ? 'Expired' : status
 }
 
 function toUtcDays(value: string): number {
@@ -153,9 +171,25 @@ export async function listPayers(
   const { data, error, count } = await query.order('payer_name').order('id').range(rangeStart, rangeEnd)
   if (error) {
     console.error('[listPayers] query failed:', { orgId, filters, error })
-    return { rows: [], rowCount: 0 }
+    throw new Error('Unable to load payers.')
   }
   return { rows: (data ?? []) as PayerListPage['rows'], rowCount: count ?? 0 }
+}
+
+export async function getPayer(orgId: string, payerId: string): Promise<Payer | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('payers')
+    .select('id, organization_id, payer_name, payer_type, program_name, status, created_at, updated_at')
+    .eq('organization_id', orgId)
+    .eq('id', payerId)
+    .single()
+  if (error) {
+    console.error('[getPayer] query failed:', { orgId, payerId, error })
+    if (error.code === 'PGRST116') return null
+    throw new Error('Unable to load payer.')
+  }
+  return data as Payer
 }
 
 export async function upsertPayer(orgId: string, data: Omit<UpsertPayerInput, 'organizationId'>): Promise<Payer> {
@@ -181,28 +215,35 @@ export async function upsertPayer(orgId: string, data: Omit<UpsertPayerInput, 'o
 
 export async function listAvailableServiceCodeMappings(): Promise<OrganizationServiceWithMapping['service_code_mapping'][]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('service_code_mappings')
-    .select(`
-      id,
-      evv_service_id,
-      evv_service_name,
-      payer_type,
-      program_name,
-      billing_service:billing_services(
-        billing_code,
-        service_name,
-        service_category
-      )
-    `)
-    .eq('active', true)
-    .order('evv_service_name')
-    .order('id')
-  if (error) {
-    console.error('[listAvailableServiceCodeMappings] query failed:', { error })
-    return []
-  }
-  return (data ?? []) as unknown as OrganizationServiceWithMapping['service_code_mapping'][]
+  return fetchAllPages(async (page, pageSize) => {
+    const rangeStart = page * pageSize
+    const { data, error, count } = await supabase
+      .from('service_code_mappings')
+      .select(`
+        id,
+        evv_service_id,
+        evv_service_name,
+        payer_type,
+        program_name,
+        billing_service:billing_services(
+          billing_code,
+          service_name,
+          service_category
+        )
+      `, { count: 'exact' })
+      .eq('active', true)
+      .order('evv_service_name')
+      .order('id')
+      .range(rangeStart, rangeStart + pageSize - 1)
+    if (error) {
+      console.error('[listAvailableServiceCodeMappings] query failed:', { page, pageSize, error })
+      throw new Error('Unable to load service code mappings.')
+    }
+    return {
+      rows: (data ?? []) as unknown as OrganizationServiceWithMapping['service_code_mapping'][],
+      rowCount: count ?? 0,
+    }
+  })
 }
 
 export async function listOrgServices(
@@ -219,16 +260,35 @@ export async function listOrgServices(
   const { data, error, count } = await query.order('local_service_name').order('id').range(rangeStart, rangeEnd)
   if (error) {
     console.error('[listOrgServices] query failed:', { orgId, filters, error })
-    return { rows: [], rowCount: 0 }
+    throw new Error('Unable to load organization services.')
   }
   return { rows: (data ?? []) as unknown as OrganizationServiceWithMapping[], rowCount: count ?? 0 }
+}
+
+export async function getOrgService(
+  orgId: string,
+  organizationServiceId: string,
+): Promise<OrganizationServiceWithMapping | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('organization_services')
+    .select(ORGANIZATION_SERVICE_LIST_COLUMNS)
+    .eq('organization_id', orgId)
+    .eq('id', organizationServiceId)
+    .single()
+  if (error) {
+    console.error('[getOrgService] query failed:', { orgId, organizationServiceId, error })
+    if (error.code === 'PGRST116') return null
+    throw new Error('Unable to load organization service.')
+  }
+  return data as unknown as OrganizationServiceWithMapping
 }
 
 export async function activateOrgService(
   orgId: string,
   userId: string,
   data: Omit<ActivateOrgServiceInput, 'organizationId'>,
-): Promise<OrganizationService> {
+): Promise<OrganizationServicePublic> {
   const supabase = await createClient()
   const { data: row, error } = await supabase
     .from('organization_services')
@@ -239,21 +299,21 @@ export async function activateOrgService(
       requires_clinical_approval: data.requires_clinical_approval,
       created_by_user_id: userId,
     } as never)
-    .select()
+    .select(ORGANIZATION_SERVICE_RETURN_COLUMNS)
     .single()
   if (error) {
     console.error('[activateOrgService] insert failed:', { orgId, error })
     if (error.code === '23505') throw new Error('Service already activated')
     throw new Error(error.message)
   }
-  return row as OrganizationService
+  return row as OrganizationServicePublic
 }
 
 export async function updateOrgService(
   orgId: string,
   userId: string,
   data: Omit<UpdateOrgServiceInput, 'organizationId'>,
-): Promise<OrganizationService> {
+): Promise<OrganizationServicePublic> {
   const supabase = await createClient()
   const updateData: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by_user_id: userId }
   if (data.local_service_name !== undefined) updateData.local_service_name = data.local_service_name
@@ -264,13 +324,13 @@ export async function updateOrgService(
     .update(updateData as never)
     .eq('id', data.organizationServiceId)
     .eq('organization_id', orgId)
-    .select()
+    .select(ORGANIZATION_SERVICE_RETURN_COLUMNS)
     .single()
   if (error) {
     console.error('[updateOrgService] update failed:', { orgId, organizationServiceId: data.organizationServiceId, error })
     throw new Error(error.message)
   }
-  return row as OrganizationService
+  return row as OrganizationServicePublic
 }
 
 export async function listPatientAuthorizations(
@@ -280,30 +340,21 @@ export async function listPatientAuthorizations(
 ): Promise<PatientAuthorizationListPage> {
   const supabase = await createClient()
   const { rangeStart, rangeEnd } = pagination(filters)
-  const { data, error, count } = await supabase
-    .from('patient_authorizations')
-    .select(AUTHORIZATION_LIST_COLUMNS, { count: 'exact' })
-    .eq('organization_id', orgId)
-    .eq('patient_id', patientId)
-    .is('archived_at', null)
-    .order('authorization_end_date', { ascending: true })
-    .order('id')
-    .range(rangeStart, rangeEnd)
-  if (error) {
-    console.error('[listPatientAuthorizations] query failed:', { orgId, patientId, filters, error })
-    return { rows: [], rowCount: 0 }
-  }
-  const rows = (data ?? []).map((row) => {
-    const typed = row as unknown as Omit<PatientAuthorizationListItem, 'service_count' | 'effective_status'>
-      & { services: { id: string }[] }
-    const { services, ...authorization } = typed
-    return {
-      ...authorization,
-      service_count: services.length,
-      effective_status: effectiveStatus(authorization.status, authorization.authorization_end_date),
-    }
+  const { data, error } = await supabase.rpc('list_patient_authorizations_for_patient', {
+    target_org_id: orgId,
+    target_patient_id: patientId,
+    page_offset: rangeStart,
+    page_size: rangeEnd - rangeStart + 1,
   })
-  return { rows, rowCount: count ?? 0 }
+  if (error) {
+    console.error('[listPatientAuthorizations] read-model RPC failed:', { orgId, patientId, filters, error })
+    throw new Error('Unable to load patient authorizations.')
+  }
+  if (!data) {
+    console.error('[listPatientAuthorizations] read-model RPC returned no data:', { orgId, patientId, filters })
+    throw new Error('Unable to load patient authorizations.')
+  }
+  return data
 }
 
 export async function getAuthorizationDetail(
@@ -311,58 +362,24 @@ export async function getAuthorizationDetail(
   patientId: string,
   authorizationId: string,
   serviceDate = new Date().toISOString().slice(0, 10),
+  serviceOffset = 0,
+  targetServiceId: string | null = null,
 ): Promise<PatientAuthorizationDetail | null> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('patient_authorizations')
-    .select(`
-      id, organization_id, patient_id, payer_id, masked_prior_auth_number,
-      authorization_start_date, authorization_end_date, status, retention_category,
-      created_at, created_by_user_id, updated_at, updated_by_user_id, archived_at,
-      payer:payers(payer_name, payer_type),
-      services:authorization_services(
-        id, organization_id, authorization_id, organization_service_id,
-        authorized_quantity, quantity_unit, quantity_period, reimbursement_rate,
-        rate_unit, service_requirement_code, restricted_note_id,
-        effective_start_date, effective_end_date, active, created_at, updated_at,
-        organization_service:organization_services(local_service_name)
-      )
-    `)
-    .eq('organization_id', orgId)
-    .eq('patient_id', patientId)
-    .eq('id', authorizationId)
-    .is('archived_at', null)
-    .single()
-  if (error) {
-    console.error('[getAuthorizationDetail] query failed:', { orgId, patientId, authorizationId, error })
-    return null
-  }
-  const result = data as unknown as Omit<PatientAuthorizationDetail, 'effective_status'>
-  const activeServices = result.services
-    .filter((service) => service.active)
-    .sort((left, right) => left.effective_start_date.localeCompare(right.effective_start_date) || left.id.localeCompare(right.id))
-    .slice(0, 4)
-  const { data: organizationRates, error: ratesError } = await supabase.rpc('get_effective_organization_service_rates', {
+  const { data, error } = await supabase.rpc('get_patient_authorization_detail', {
     target_org_id: orgId,
-    target_organization_service_ids: activeServices.map((service) => service.organization_service_id),
+    target_patient_id: patientId,
+    target_authorization_id: authorizationId,
     service_date: serviceDate,
+    service_offset: serviceOffset,
+    service_limit: 25,
+    target_service_id: targetServiceId,
   })
-  if (ratesError) {
-    console.error('[getAuthorizationDetail] effective rate lookup failed:', { orgId, authorizationId, ratesError })
-    throw new Error(ratesError.message)
+  if (error) {
+    console.error('[getAuthorizationDetail] read-model RPC failed:', { orgId, patientId, authorizationId, error })
+    throw new Error('Unable to load authorization detail.')
   }
-  const ratesByServiceId = new Map(
-    organizationRates.map((rate) => [rate.organization_service_id, rate]),
-  )
-  return {
-    ...result,
-    effective_status: effectiveStatus(result.status, result.authorization_end_date),
-    services: activeServices
-      .map((service): AuthorizationServiceWithEffectiveRate => ({
-        ...service,
-        effective_rate: pickEffectiveRate(service, ratesByServiceId.get(service.organization_service_id) ?? null, serviceDate),
-      })),
-  }
+  return data
 }
 
 export async function createAuthorization(
@@ -376,7 +393,7 @@ export async function createAuthorization(
     prior_auth_number?: string | null
     services: AuthorizationServiceInput[]
   },
-): Promise<PatientAuthorization> {
+): Promise<string> {
   const supabase = await createClient()
   const { data: row, error } = await supabase.rpc('create_authorization_with_services', {
     target_org_id: orgId,
@@ -389,8 +406,16 @@ export async function createAuthorization(
     services: data.services,
   })
   if (error) {
-    console.error('[createAuthorization] RPC failed:', { orgId, patientId: data.patientId, error })
-    throw new Error(error.message)
+    console.error('[createAuthorization] RPC failed:', {
+      orgId,
+      patientId: data.patientId,
+      errorCode: error.code,
+    })
+    throw new Error('Unable to create authorization')
+  }
+  if (!row) {
+    console.error('[createAuthorization] RPC returned no authorization id:', { orgId, patientId: data.patientId })
+    throw new Error('Authorization could not be created')
   }
   return row
 }
@@ -399,7 +424,7 @@ export async function updateAuthorization(
   orgId: string,
   userId: string,
   data: Omit<UpdateAuthorizationInput, 'organizationId' | 'patientId'>,
-): Promise<PatientAuthorization> {
+): Promise<PatientAuthorizationPublic> {
   const supabase = await createClient()
   const { data: current, error: currentError } = await supabase
     .from('patient_authorizations')
@@ -407,7 +432,14 @@ export async function updateAuthorization(
     .eq('organization_id', orgId)
     .eq('id', data.authorizationId)
     .single()
-  if (currentError || !current) throw new Error('Authorization not found')
+  if (currentError || !current) {
+    console.error('[updateAuthorization] current status lookup failed:', {
+      orgId,
+      authorizationId: data.authorizationId,
+      errorCode: currentError?.code,
+    })
+    throw new Error('Authorization not found')
+  }
   if (data.status && !ALLOWED_AUTH_TRANSITIONS[current.status as AuthorizationStatus].includes(data.status)) {
     throw new Error('Invalid authorization status transition')
   }
@@ -421,13 +453,17 @@ export async function updateAuthorization(
     .update(updateData as never)
     .eq('organization_id', orgId)
     .eq('id', data.authorizationId)
-    .select()
+    .select(PATIENT_AUTHORIZATION_PUBLIC_COLUMNS)
     .single()
   if (error) {
-    console.error('[updateAuthorization] update failed:', { orgId, authorizationId: data.authorizationId, error })
-    throw new Error(error.message)
+    console.error('[updateAuthorization] update failed:', {
+      orgId,
+      authorizationId: data.authorizationId,
+      errorCode: error.code,
+    })
+    throw new Error('Unable to update authorization')
   }
-  return row as PatientAuthorization
+  return row as PatientAuthorizationPublic
 }
 
 export async function archiveAuthorization(
@@ -436,7 +472,7 @@ export async function archiveAuthorization(
   data: Omit<ArchiveAuthorizationInput, 'organizationId' | 'patientId'>,
 ): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: row, error } = await supabase
     .from('patient_authorizations')
     .update({
       archived_at: new Date().toISOString(),
@@ -445,16 +481,23 @@ export async function archiveAuthorization(
     } as never)
     .eq('organization_id', orgId)
     .eq('id', data.authorizationId)
+    .select('id')
+    .single()
   if (error) {
-    console.error('[archiveAuthorization] update failed:', { orgId, authorizationId: data.authorizationId, error })
-    throw new Error(error.message)
+    console.error('[archiveAuthorization] update failed:', {
+      orgId,
+      authorizationId: data.authorizationId,
+      errorCode: error.code,
+    })
+    throw new Error('Unable to archive authorization')
   }
+  if (!row) throw new Error('Authorization not found')
 }
 
 export async function upsertAuthorizationService(
   orgId: string,
   data: Omit<UpsertAuthorizationServiceInput, 'organizationId' | 'patientId'>,
-): Promise<AuthorizationService> {
+): Promise<AuthorizationServiceManagementRecord> {
   const supabase = await createClient()
   const { data: authorization, error: authorizationError } = await supabase
     .from('patient_authorizations')
@@ -467,7 +510,7 @@ export async function upsertAuthorizationService(
     console.error('[upsertAuthorizationService] authorization lookup failed:', {
       orgId,
       authorizationId: data.authorizationId,
-      error: authorizationError,
+      errorCode: authorizationError?.code,
     })
     throw new Error('Authorization not found')
   }
@@ -493,17 +536,21 @@ export async function upsertAuthorizationService(
       .eq('organization_id', orgId)
       .eq('authorization_id', data.authorizationId)
     : supabase.from('authorization_services').insert(payload as never)
-  const { data: row, error } = await query.select().single()
+  const { data: row, error } = await query.select(AUTHORIZATION_SERVICE_SAFE_COLUMNS).single()
   if (error) {
     console.error('[upsertAuthorizationService] write failed:', {
       orgId,
       authorizationId: data.authorizationId,
       authorizationServiceId: data.authorizationServiceId,
-      error,
+      errorCode: error.code,
     })
-    throw new Error(error.message)
+    throw new Error('Unable to save authorization service')
   }
-  return row as AuthorizationService
+  return {
+    ...row,
+    reimbursement_rate: payload.reimbursement_rate,
+    rate_unit: payload.rate_unit,
+  } as AuthorizationServiceManagementRecord
 }
 
 export async function deactivateAuthorizationService(
@@ -511,21 +558,24 @@ export async function deactivateAuthorizationService(
   data: Omit<DeactivateAuthorizationServiceInput, 'organizationId' | 'patientId'>,
 ): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: row, error } = await supabase
     .from('authorization_services')
     .update({ active: false, updated_at: new Date().toISOString() } as never)
     .eq('id', data.authorizationServiceId)
     .eq('organization_id', orgId)
     .eq('authorization_id', data.authorizationId)
+    .select('id')
+    .single()
   if (error) {
     console.error('[deactivateAuthorizationService] update failed:', {
       orgId,
       authorizationId: data.authorizationId,
       authorizationServiceId: data.authorizationServiceId,
-      error,
+      errorCode: error.code,
     })
-    throw new Error(error.message)
+    throw new Error('Unable to deactivate authorization service')
   }
+  if (!row) throw new Error('Authorization service not found')
 }
 
 export async function checkAuthorizationServiceCompatibility(
@@ -550,7 +600,42 @@ export async function checkAuthorizationServiceCompatibility(
     })
     throw new Error(error.message)
   }
-  return data[0]
+  const result = data[0]
+  if (!result) throw new Error('Authorization compatibility could not be determined')
+  return result
+}
+
+export async function listOrganizationServiceRates(
+  orgId: string,
+  organizationServiceId: string,
+  filters?: { page?: number; pageSize?: number },
+): Promise<OrganizationServiceRateListPage> {
+  const supabase = await createClient()
+  const { rangeStart, rangeEnd } = pagination(filters)
+  const { data, error, count } = await supabase
+    .from('organization_service_rates')
+    .select(`
+      id,
+      organization_id,
+      organization_service_id,
+      reimbursement_rate,
+      rate_unit,
+      effective_start_date,
+      effective_end_date,
+      change_reason,
+      created_by_user_id,
+      created_at
+    `, { count: 'exact' })
+    .eq('organization_id', orgId)
+    .eq('organization_service_id', organizationServiceId)
+    .order('effective_start_date', { ascending: false })
+    .order('id')
+    .range(rangeStart, rangeEnd)
+  if (error) {
+    console.error('[listOrganizationServiceRates] query failed:', { orgId, organizationServiceId, filters, error })
+    throw new Error('Unable to load organization service rates.')
+  }
+  return { rows: (data ?? []) as OrganizationServiceRate[], rowCount: count ?? 0 }
 }
 
 export async function setOrganizationServiceRate(
@@ -570,9 +655,14 @@ export async function setOrganizationServiceRate(
     ...input,
   })
   if (error) {
-    console.error('[setOrganizationServiceRate] RPC failed:', { orgId, organizationServiceId, error })
-    throw new Error(error.message)
+    console.error('[setOrganizationServiceRate] RPC failed:', {
+      orgId,
+      organizationServiceId,
+      errorCode: error.code,
+    })
+    throw new Error('Unable to set organization service rate')
   }
+  if (!data) throw new Error('Organization service rate could not be saved')
   return data
 }
 
@@ -580,31 +670,23 @@ export async function listActiveAuthorizationServicesForPatient(
   orgId: string,
   patientId: string,
   onDate: string,
-): Promise<AuthorizationService[]> {
+  page = 0,
+  pageSize = 100,
+): Promise<AuthorizationServiceForScheduling[]> {
+  if (!Number.isInteger(page) || page < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new Error('Invalid authorization service page range.')
+  }
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('authorization_services')
-    .select(`
-      id, organization_id, authorization_id, organization_service_id,
-      authorized_quantity, quantity_unit, quantity_period, reimbursement_rate,
-      rate_unit, service_requirement_code, restricted_note_id,
-      effective_start_date, effective_end_date, active, created_at, updated_at,
-      authorization:patient_authorizations!inner(
-        patient_id, status, authorization_start_date, authorization_end_date, archived_at
-      )
-    `)
-    .eq('organization_id', orgId)
-    .eq('authorization.patient_id', patientId)
-    .eq('authorization.status', 'Active')
-    .is('authorization.archived_at', null)
-    .eq('active', true)
-    .lte('effective_start_date', onDate)
-    .gte('effective_end_date', onDate)
-    .order('effective_end_date')
-    .order('id')
+  const { data, error } = await supabase.rpc('list_active_authorization_services_for_patient', {
+    target_org_id: orgId,
+    target_patient_id: patientId,
+    on_date: onDate,
+    page_offset: page * pageSize,
+    page_size: pageSize,
+  })
   if (error) {
     console.error('[listActiveAuthorizationServicesForPatient] query failed:', { orgId, patientId, onDate, error })
-    return []
+    throw new Error('Unable to load active authorization services.')
   }
-  return (data ?? []) as unknown as AuthorizationService[]
+  return data ?? []
 }
