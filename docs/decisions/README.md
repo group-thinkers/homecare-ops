@@ -7,3 +7,4 @@ Never edit an Accepted ADR's decision; supersede it with a new one.
 | --- | --- | --- |
 | [ADR-001](ADR-001-ci-cd-and-repository-protection.md) | CI/CD and repository protection | Accepted |
 | [ADR-002](ADR-002-multi-contributor-coordination.md) | Multi-contributor coordination | Accepted |
+| [ADR-003](ADR-003-review-threads-resolved-before-merge.md) | Review threads must be resolved before merge | Accepted |

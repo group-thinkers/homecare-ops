@@ -94,4 +94,7 @@ Several people and agents work at once. Agents cannot see each other's chats, so
   `docs/KNOWN_ISSUES.md`, `package-lock.json`. Keep edits there small and append-style, and merge both sides when they conflict.
 - **Merge etiquette.** Squash merges; delete the branch after. Do not edit another developer's claimed issue, branch or plan; ask your developer to raise it with them.
 - **Dependabot** PRs merge themselves when patch-only and green; leave them alone otherwise.
+- **Review threads.** `CI ok` fails while a pull request has an unresolved review thread (job `review-threads`, `scripts/review-threads.sh <pr>`,
+  ADR-003). Fix or answer each one with the `address-pr-feedback` skill, then resolve it. Resolving does not re-run CI: push, or run
+  `gh run rerun <run-id> --failed`.
 

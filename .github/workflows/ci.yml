@@ -178,11 +178,37 @@ jobs:
         if: github.event_name == 'pull_request'
         run: scripts/check-migrations.sh --base "origin/${{ github.base_ref }}"
 
+  # Every review thread on the pull request must be resolved (fixed, or answered and resolved). It runs last so reviews posted while the
+  # other jobs ran (Copilot's automatic review) are counted. Resolving a thread does not trigger a workflow: re-run this job afterwards
+  # (`gh run rerun <run-id> --failed`); the address-pr-feedback skill does. Passes on push and workflow_dispatch (no pull request).
+  review-threads:
+    name: review threads resolved
+    needs: [lint, typecheck, test, build, migrations, e2e, migration-order]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Not a pull request
+        if: github.event_name != 'pull_request'
+        run: echo "no pull request, nothing to check"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+      - name: No unresolved review threads
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: scripts/review-threads.sh "$PR_NUMBER" --check --repo "$GITHUB_REPOSITORY"
+
   # The single check to require in branch protection.
   ci-ok:
     name: CI ok
     if: always()
-    needs: [lint, typecheck, test, build, migrations, e2e, migration-order]
+    needs: [lint, typecheck, test, build, migrations, e2e, migration-order, review-threads]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
