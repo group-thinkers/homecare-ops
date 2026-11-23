@@ -70,7 +70,7 @@ Browser tests do not detect an open RLS policy (the app also filters by organiza
 
 - `scripts/quality.sh` is the single entry point (`lint | typecheck | test | build | audit | full`); `npm run quality` runs `full`.
 - `ci.yml` (PRs, pushes to main): lint, typecheck, unit, build, advisory audit, migrations + `supabase test db` on a fresh
-  local Supabase, browser tests, and the `CI ok` gate (the required check on `main`).
+  local Supabase, browser tests, the review-thread check (`scripts/review-threads.sh`), and the `CI ok` gate (the required check on `main`).
 - `nightly.yml`: enforced `npm audit` (high+), full gate, migrations from scratch; alerts Discord on failure.
 - `codeql.yml` static analysis; `dependabot.yml` + `dependabot-automerge.yml` weekly updates (patch-only auto-merge).
 - `supabase-migrate.yml`: on merge, pushes `supabase/migrations` to production; alerts Discord if it fails.

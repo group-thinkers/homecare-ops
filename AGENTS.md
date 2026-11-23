@@ -64,7 +64,7 @@ first (`write-adr`). The plan and cheatsheet date from 2026-09-09; where they di
 ## Workflow
 
 Skills in `.agents/skills/` (also `.claude/skills`): `plan-change → implement-change → verify-change → review-change → harden-change → complete-task → prepare-pr`,
-plus `add-migration` and `write-adr`. Build one entity vertical slice at a time in the cheatsheet's order: **migration → types →
+plus `add-migration`, `write-adr` and `address-pr-feedback` (PR review comments; `CI ok` needs every review thread resolved). Build one entity vertical slice at a time in the cheatsheet's order: **migration → types →
 schemas → service → actions → pages → components → nav → tests → verify.** Non-trivial work gets a plan from `docs/plans/TEMPLATE.md`.
 Finish a whole slice before the next; finished plans move to `docs/plans/completed/`. Branch `<type>/<issue#>-<slug>` (`feat/ fix/ chore/ ci/ docs/ test/`), never `main`; one Conventional Commit per coherent unit. Done means each acceptance criterion is evidenced by a command and its output.
 

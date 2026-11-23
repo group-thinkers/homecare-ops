@@ -6,7 +6,7 @@ Last updated: 2026-10-13. Keep this file short and current; history belongs in g
 
 The foundation, user management, patients and caregivers are built and demoable. Authorizations exist only as database
 migrations. Scheduling, matching, call-offs, notifications, the dashboard and operational history are not started.
-CI/CD, security scanning and this agent workflow are in place (ADR-001). The MVP uses synthetic data only (see AGENTS.md).
+CI/CD, security scanning and this agent workflow are in place (ADR-001); `CI ok` also requires every PR review thread resolved (ADR-003, `address-pr-feedback` skill). The MVP uses synthetic data only (see AGENTS.md).
 
 The plan (`docs/implementation-plan.md`) is dated 2026-09-09 and its "Current State" table is stale. Reality, checked against `main`:
 

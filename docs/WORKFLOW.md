@@ -54,7 +54,7 @@ Developers choose each sprint's issues and move cards. Agents do not edit the bo
 
 ## What keeps it safe
 
-- One required check, `CI ok`: lint, typecheck, unit tests, build, RLS and permission tests on a fresh local Supabase, browser tests, and the migration-order check. It applies to admins too; no approvals are required.
+- One required check, `CI ok`: lint, typecheck, unit tests, build, RLS and permission tests on a fresh local Supabase, browser tests, the migration-order check, and no unresolved review threads on the pull request (ADR-003). It applies to admins too; no approvals are required.
 - `scripts/check-migrations.sh` fails duplicate or gapped migration numbers and any edit, delete or rename of a merged migration (production applies migrations on merge). A justified edit needs a line in `supabase/migration-edits.allow`.
 - CodeQL, secret scanning with push protection, Dependabot (patch updates merge themselves), a nightly audit, and Discord alerts when the nightly fails, the production migration push fails, or `main` goes red.
 - Synthetic data only; real PHI stays out until the HIPAA readiness work is done. This repository is public.
